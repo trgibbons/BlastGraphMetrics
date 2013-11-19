@@ -2,38 +2,10 @@
 
 # Standard Python libraries
 import sys
-import os
 import argparse
 
 # Third-party libraries
 import networkx as nx
-
-
-
-def catch_argument_errors(args):
-  """Attempt to catch argument and file format errors
-
-  Args:
-    args: The argparse.Namespace object returned by get_parse_args
-
-  Returns:
-    None (hopefully)
-
-  Raises:
-    TODO: Implement proper Python exception handling
-  """
-  kill_switch = 0
-
-  if os.fstat(args.both.fileno()).st_size == 0:
-    args.both = False
-    if not len(args.self)>0 and len(args.cross)>0:
-      sys.stderr.write(
-        'Must have at least one file flagged as "both", or at least one each '+
-        'flagged as "self" and "cross", repectively.\n')
-      kill_switch += 1
-
-  if kill_switch > 0:
-    sys.exit()
 
 
 
@@ -48,86 +20,62 @@ def get_parsed_args():
 
   Returns:
     args: An argparse.Namespace object containing the parsed arguments
-
-  Raises:
-    None
   """
   parser = argparse.ArgumentParser(
-             description='Compute a set of Bit Score Ratios from either '+
-                         'BLASTP or BLASTN hits')
+             description='Generate a set of graphs from a tab-delimited '+
+                         'BLASTP or BLASTN file such that the first two '+
+                         'columns contain the query and subject IDs, '+
+                         'respectively, and the last four columns contain, in '+
+                         'order: E-value, bit score, query length, subject '+
+                         'length')
 
   # Group: IO options
-  parser.add_argument('-s', '--self', dest='self', nargs='+',
-                      type=argparse.FileType('r'),
-                      help='Tab-delimited BLAST file(s) containing self '+
-                           'alignments (non-self alignments will be ignored)')
-  parser.add_argument('-c', '--cross', dest='cross', nargs='+',
-                      type=argparse.FileType('r'),
-                      help='Tab-delimited BLAST file(s) containing non-self '+
-                           'alignments (self alignments will be ignored)')
-  parser.add_argument('-b', '--both', dest='both', nargs='?',
-                      type=argparse.FileType('r'), default=sys.stdin,
-                      help='Tab-delimited BLAST file containing a combination '+
-                           'of self and non-self alignments [def=stdin]')
-  parser.add_argument('-o', '--out', dest='out', nargs='?',
-                      type=argparse.FileType('w'), default=sys.stdout,
-                      help='Name for MCL-formatted graph output file '+
-                           '[def=stdout]')
-  parser.add_argument('-d', '--debug', dest='debug',
-                      type=argparse.FileType('w'), default=False,
-                      help='File for capturing debug messages')
+  parser.add_argument('blast', type=argparse.FileType('r'),
+                      help='Tab-delimited BLAST file (comment lines are okay)')
+  parser.add_argument('out_pref',
+                      help='Prefix for the MCL-compatible "abc" graph files')
 
   # Group: Formatting options
+  parser.add_argument('--evcol', dest='evcol',
+                      action='store', type=int, default=11,
+                      help='One-indexed column containing pairwise E-values '+
+                           '(not required if files include standard header '+
+                           'lines) [def=11]')
   parser.add_argument('--bscol', dest='bscol',
                       action='store', type=int, default=12,
                       help='One-indexed column containing pairwise bit scores '+
                            '(not required if files include standard header '+
                            'lines) [def=12]')
+  parser.add_argument('--qlcol', dest='qlcol',
+                      action='store', type=int, default=13,
+                      help='One-indexed column containing query lengths '+
+                           '(not required if files include standard header '+
+                           'lines) [def=13]')
+  parser.add_argument('--slcol', dest='slcol',
+                      action='store', type=int, default=14,
+                      help='One-indexed column containing subject lengths '+
+                           '(not required if files include standard header '+
+                           'lines) [def=14]')
   parser.add_argument('--idchar', dest='idchar', action='store', default='|',
                       help='The character used to separate the organism ID '+
                            'from the rest of the sequence header [def="|"]')
-  parser.add_argument('--idlist', dest='idlist', action='store', default=None,
-                      help='Text file containing a list of organisms IDs, '+
-                           'which must occur at the beginning of each '+
-                           'sequence ID ("--idchar" option must also be '+
-                           'provided if any IDs are prefixes of other IDs)')
-
-  # Group: Behavioral options
-  parser.add_argument('-n', '--normalize', dest='norm',
-                      action='store_true', default=False,
-                      help='Normalize edge weights according to intra- and '+
-                           'inter-organism averages (requires the "-i" option)')
-  parser.add_argument('-r', '--reciprocal', dest='recip',
-                      action='store_true', default=False,
-                      help='Divide alignment bit score by max(self1,self2) '+
-                      'instead of min(self1,self2) for increased stringency '+
-                      '[def=False]')
 
   # Group: TODO
-  parser.add_argument('-t', '--translated', action='store_true', default=False,
-                      help='One or more of the data sets were '+
-                           'bioinformatically translated by BLAST (requires '+
-                           'the "--idchar" and/or "--idlist" option(s) be '+
-                           'used with a file containing a second column '+
-                           'specifying either "nuc" or "pro" for each '+
-                           'organism ID listed in the first column')
   parser.add_argument('-m', '--merge', dest='merge',
                       action='store_true', default=False,
                       help='Merge sequences from a single organism when they '+
                            'have non-overlapping alignments to the same '+
-                           'target sequence (helpful for highly-fragmented '+
-                           'assemblies, requires the "-i" option)')
+                           'target sequence')
 
   args = parser.parse_args()
-
-  catch_argument_errors(args)
 
   return args
 
 
 
-def get_self_bit_scores(
-      bsr_graph, self_handle, bscol=11, norm=False, idchar=None, org_ids=None):
+def get_self_bit_scores_and_org_ids(
+      met_grf, blast_handle, idchar=None, org_ids=None, 
+      evcol=10, bscol=11, qlcol=12, slcol=13):
   """Get bit scores from full-length self-alignments
 
   Searches an open file for tab-delimited BLAST hit records where the query and
@@ -150,30 +98,26 @@ def get_self_bit_scores(
 
   Returns:
     Nothing, all data structures are edited in place
-
-  Raises:
-    None
   """
-  for line in self_handle:
+  for line in blast_handle:
     temp = line.strip().split()
     if temp[0][0] == "#":
       continue
 
     if temp[0] == temp[1]:
       seq_id = str(temp[0])
-      bitscore = float(temp[bscol])
+      bit_scr = float(temp[bscol])
+      org_ids.add(seq_id.split(idchar)[0])
 
-      if norm:
-        org_ids.add(seq_id.split(idchar)[0])
-
-      if not bsr_graph.has_node(seq_id):
-        bsr_graph.add_node(seq_id, sbs=bitscore, org=None)
-      elif bitscore > bsr_graph.node[seq_id]['sbs']:
-        bsr_graph.node[seq_id]['sbs'] = bitscore
+      if not met_grf.has_node(seq_id):
+        met_grf.add_node(seq_id, sbs=bit_scr, org=None)
+      elif bit_scr > met_grf.node[seq_id]['sbs']:
+        met_grf.node[seq_id]['sbs'] = bit_scr
 
 
 
-def get_cross_bit_scores(bsr_graph, cross_handle, bscol=11, recip=False):
+def get_metrics(met_grf, blast_handle,
+                evcol=10, bscol=11, qlcol=12, slcol=13):
   """Get bit scores from full-length alignments between different sequences
 
   Searches an open file for tab-delimited BLAST hit records where the query and
@@ -196,11 +140,8 @@ def get_cross_bit_scores(bsr_graph, cross_handle, bscol=11, recip=False):
 
   Returns:
     Nothing, all data structures are edited in place
-
-  Raises:
-    None
   """
-  for line in cross_handle:
+  for line in blast_handle:
     temp = line.strip().split()
     if temp[0][0] == "#":
       continue
@@ -208,25 +149,33 @@ def get_cross_bit_scores(bsr_graph, cross_handle, bscol=11, recip=False):
     if temp[0] != temp[1]:
       qry_id = str(temp[0])
       ref_id = str(temp[1])
-      bitscore = float(temp[bscol])
+      evalue = float(temp[evcol])
+      bit_scr = float(temp[bscol])
+      qry_len = float(temp[qlcol])
+      ref_len = float(temp[slcol])
 
-      if bsr_graph.has_node(qry_id) and bsr_graph.has_node(ref_id):
-        qry_sbs = bsr_graph.node[qry_id]['sbs']
-        ref_sbs = bsr_graph.node[ref_id]['sbs']
+      if met_grf.has_node(qry_id) and met_grf.has_node(ref_id):
+        qry_sbs = met_grf.node[qry_id]['sbs']
+        ref_sbs = met_grf.node[ref_id]['sbs']
+        bpb = bit_scr / min(qry_len, ref_len)
+        bsr = bit_scr / min(qry_sbs, ref_sbs)
 
-        if recip:
-          bsr = bitscore / max(qry_sbs, ref_sbs)
+        if not met_grf.has_edge(qry_id, ref_id):
+          met_grf.add_edge(
+            qry_id, ref_id, evl=evalue, bit=bit_scr, bpb=bpb, bsr=bsr)
         else:
-          bsr = bitscore / min(qry_sbs, ref_sbs)
+          if evalue < met_grf[qry_id][ref_id]['evl']:
+            met_grf[qry_id][ref_id]['evl'] = evalue
+          if bit_scr > met_grf[qry_id][ref_id]['bit']:
+            met_grf[qry_id][ref_id]['bit'] = bit_scr
+          if bpb > met_grf[qry_id][ref_id]['bpb']:
+            met_grf[qry_id][ref_id]['bpb'] = bpb
+          if bsr > met_grf[qry_id][ref_id]['bsr']:
+            met_grf[qry_id][ref_id]['bsr'] = bsr
 
-        if not bsr_graph.has_edge(qry_id, ref_id):
-          bsr_graph.add_edge(qry_id, ref_id, bsr=bsr)
-        elif bsr > bsr_graph[qry_id][ref_id]['bsr']:
-          bsr_graph[qry_id][ref_id]['bsr'] = bsr
 
 
-
-def compute_organism_averages(bsr_graph, org_ids, idchar):
+def compute_organism_averages(met_grf, idchar, org_ids):
   """Compute average scores between and within each pair of organisms
   
   Args:
@@ -238,30 +187,60 @@ def compute_organism_averages(bsr_graph, org_ids, idchar):
   """
   org_avgs = nx.Graph()
 
-  for qry_id, ref_id, edata in bsr_graph.edges(data=True):
+  for qry_id, ref_id, edata in met_grf.edges(data=True):
     qry_org = qry_id.split(idchar)[0]
     ref_org = ref_id.split(idchar)[0]
+
     if org_avgs.has_edge(qry_org, ref_org):
       org_avgs[qry_org][ref_org]['cnt'] += 1
-      org_avgs[qry_org][ref_org]['sum'] += edata['bsr']
+      org_avgs[qry_org][ref_org]['evl_sum'] += edata['evl']
+      org_avgs[qry_org][ref_org]['bit_sum'] += edata['bit']
+      org_avgs[qry_org][ref_org]['bpb_sum'] += edata['bpb']
+      org_avgs[qry_org][ref_org]['bsr_sum'] += edata['bsr']
     else:
-      org_avgs.add_edge(qry_org, ref_org, cnt=1, sum=edata['bsr'], avg=None)
+      org_avgs.add_edge(
+        qry_org, ref_org, cnt=1,
+        evl_sum=edata['evl'], evl_avg=None,
+        bit_sum=edata['bit'], bit_avg=None,
+        bpb_sum=edata['bpb'], bpb_avg=None,
+        bsr_sum=edata['bsr'], bsr_avg=None)
 
-  org_avgs.add_node('global', cnt=0, sum=0.)
+  org_avgs.add_node('global', cnt=0,
+                    evl_sum=0., bit_sum=0., bpb_sum=0., bsr_sum=0.)
   for qry_org, ref_org, edata in org_avgs.edges(data=True):
     org_avgs.node['global']['cnt'] += edata['cnt']
-    org_avgs.node['global']['sum'] += edata['sum'] #float
-    org_avgs[qry_org][ref_org]['avg'] = edata['sum']/edata['cnt']
+
+    org_avgs.node['global']['evl_sum'] += edata['evl_sum'] #float
+    org_avgs[qry_org][ref_org]['evl_avg'] = edata['evl_sum']/edata['cnt']
+
+    org_avgs.node['global']['bit_sum'] += edata['bit_sum'] #float
+    org_avgs[qry_org][ref_org]['bit_avg'] = edata['bit_sum']/edata['cnt']
+
+    org_avgs.node['global']['bpb_sum'] += edata['bpb_sum'] #float
+    org_avgs[qry_org][ref_org]['bpb_avg'] = edata['bpb_sum']/edata['cnt']
+
+    org_avgs.node['global']['bsr_sum'] += edata['bsr_sum'] #float
+    org_avgs[qry_org][ref_org]['bsr_avg'] = edata['bsr_sum']/edata['cnt']
 
   glb_cnt = org_avgs.node['global']['cnt']
-  glb_sum = org_avgs.node['global']['sum'] #float
-  org_avgs.node['global']['avg'] = glb_sum/glb_cnt
+
+  glb_evl_sum = org_avgs.node['global']['evl_sum'] #float
+  org_avgs.node['global']['evl_avg'] = glb_evl_sum/glb_cnt
+
+  glb_bit_sum = org_avgs.node['global']['bit_sum'] #float
+  org_avgs.node['global']['bit_avg'] = glb_bit_sum/glb_cnt
+
+  glb_bpb_sum = org_avgs.node['global']['bpb_sum'] #float
+  org_avgs.node['global']['bpb_avg'] = glb_bpb_sum/glb_cnt
+
+  glb_bsr_sum = org_avgs.node['global']['bsr_sum'] #float
+  org_avgs.node['global']['bsr_avg'] = glb_bsr_sum/glb_cnt
 
   return org_avgs
 
 
 
-def normalize_bit_score_ratios(bsr_graph, org_avgs, idchar):
+def normalize_bit_score_ratios(met_grf, idchar, org_avgs):
   """Convert Bit Scores into Bit Score Ratios
 
   Iterates through the edges in a NetworkX graph, dividing all cross-alignment
@@ -270,30 +249,44 @@ def normalize_bit_score_ratios(bsr_graph, org_avgs, idchar):
   Convert Bit Scores into Bit Score Ratios and account for intra-/inter- 
   organism differences, if requested
   """
-  glb_avg = org_avgs.node['global']['avg']
-  for qry_id, ref_id, edata in bsr_graph.edges(data=True):
+  glb_evl_avg = org_avgs.node['global']['evl_avg']
+  glb_bit_avg = org_avgs.node['global']['bit_avg']
+  glb_bpb_avg = org_avgs.node['global']['bpb_avg']
+  glb_bsr_avg = org_avgs.node['global']['bsr_avg']
+
+  for qry_id, ref_id, edata in met_grf.edges(data=True):
     qry_org = qry_id.split(idchar)[0]
     ref_org = ref_id.split(idchar)[0]
-    scale = glb_avg / org_avgs[qry_org][ref_org]['avg']
-    raw_avg = bsr_graph[qry_id][ref_id]['bsr']
-    bsr_graph[qry_id][ref_id]['bsr'] = raw_avg * scale
+
+    evl_scl = glb_evl_avg / org_avgs[qry_org][ref_org]['evl_avg']
+    bit_scl = glb_bit_avg / org_avgs[qry_org][ref_org]['bit_avg']
+    bpb_scl = glb_bpb_avg / org_avgs[qry_org][ref_org]['bpb_avg']
+    bsr_scl = glb_bsr_avg / org_avgs[qry_org][ref_org]['bsr_avg']
+
+    raw_evl_avg = met_grf[qry_id][ref_id]['evl']
+    raw_bit_avg = met_grf[qry_id][ref_id]['bit']
+    raw_bpb_avg = met_grf[qry_id][ref_id]['bpb']
+    raw_bsr_avg = met_grf[qry_id][ref_id]['bsr']
+
+    met_grf[qry_id][ref_id]['evl'] = raw_evl_avg * evl_scl
+    met_grf[qry_id][ref_id]['bit'] = raw_bit_avg * bit_scl
+    met_grf[qry_id][ref_id]['bpb'] = raw_bpb_avg * bpb_scl
+    met_grf[qry_id][ref_id]['bsr'] = raw_bsr_avg * bsr_scl
 
 
 
-def print_mcl_input_file(bsr_graph, out_handle):
-  """Print an MCL-formatted graph file"""
-  for line in nx.generate_edgelist(bsr_graph, delimiter='\t', data=['bsr']):
-    out_handle.write(line+'\n')
+def print_abc_files(met_grf, out_pref):
+  """Print MCL-formatted .abc graph files"""
+  evl_hdl = open(out_pref+'_evl.abc', 'w')
+  bit_hdl = open(out_pref+'_bit.abc', 'w')
+  bpb_hdl = open(out_pref+'_bpb.abc', 'w')
+  bsr_hdl = open(out_pref+'_bsr.abc', 'w')
 
-
-
-def debug_print(debug_handle, org_avgs=None, bsr_graph=None):
-  """Dump some data structures for inspection"""
-  if org_avgs:
-    for u, v, data in bsr_graph.edges(data=True):
-      debug_handle.write(str(u))
-  for node, data in bsr_graph.nodes(data=True):
-    debug_handle.write(str(node)+"\t"+repr(data)+"\n")
+  for qry_id, ref_id, edata in met_grf.edges(data=['evl','bit','bpb','bsr']):
+    evl_hdl.write('{0}\t{1}\t{2}\n'.format(qry_id, ref_id, edata['evl']))
+    bit_hdl.write('{0}\t{1}\t{2}\n'.format(qry_id, ref_id, edata['bit']))
+    bpb_hdl.write('{0}\t{1}\t{2}\n'.format(qry_id, ref_id, edata['bpb']))
+    bsr_hdl.write('{0}\t{1}\t{2}\n'.format(qry_id, ref_id, edata['bsr']))
 
 
 
@@ -308,45 +301,35 @@ def main(argv=None):
 
   Returns:
     An exit status (hopefully 0)
-
-  Raises:
-    Hopefully nothing
   """
   if argv == None:
     argv = sys.argv
 
   args = get_parsed_args() 
 
-  bsr_graph = nx.Graph()
-  org_ids = set()
+  met_grf = nx.Graph() #NetworkX graph containing various BLAST-based metrics
+  org_ids = set() #Organism IDs
 
+  get_self_bit_scores_and_org_ids(met_grf=met_grf, blast_handle=args.blast,
+                                  idchar=args.idchar, org_ids=org_ids,
+                                  evcol=args.evcol-1, bscol=args.bscol-1,
+                                  qlcol=args.qlcol-1, slcol=args.slcol-1)
 
-  if args.self:
-    for self_handle in args.self:
-      get_self_bit_scores(
-        bsr_graph=bsr_graph, self_handle=self_handle, bscol=args.bscol-1,
-        norm=args.norm, idchar=args.idchar, org_ids=org_ids)
+  args.blast.seek(0)
 
-  if args.both:
-    get_self_bit_scores(
-      bsr_graph=bsr_graph, self_handle=args.both, bscol=args.bscol-1,
-      norm=args.norm, idchar=args.idchar, org_ids=org_ids)
-    args.both.seek(0)
-    get_cross_bit_scores(
-      bsr_graph=bsr_graph, cross_handle=args.both, bscol=args.bscol-1,
-      recip=args.recip)
+  get_metrics(met_grf=met_grf, blast_handle=args.blast,
+              evcol=args.evcol-1, bscol=args.bscol-1,
+              qlcol=args.qlcol-1, slcol=args.slcol-1)
 
-  if args.cross:
-    for cross_handle in args.cross:
-      get_cross_bit_scores(bsr_graph, cross_handle, args.bscol-1)
+  print_abc_files(met_grf, args.out_pref+"_raw")
 
-  if args.norm:
-    org_avgs = compute_organism_averages(
-                 bsr_graph=bsr_graph, org_ids=org_ids, idchar=args.idchar)
-    normalize_bit_score_ratios(
-      bsr_graph=bsr_graph, org_avgs=org_avgs, idchar=args.idchar)
+  org_avgs = compute_organism_averages(met_grf=met_grf,
+                                       idchar=args.idchar, org_ids=org_ids)
 
-  print_mcl_input_file(bsr_graph, args.out)
+  normalize_bit_score_ratios(met_grf=met_grf,
+                             idchar=args.idchar, org_avgs=org_avgs)
+
+  print_abc_files(met_grf, args.out_pref+"_norm")
 
 
 if __name__ == "__main__":
