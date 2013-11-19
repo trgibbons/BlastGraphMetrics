@@ -149,10 +149,14 @@ def get_metrics(met_grf, blast_handle,
     if temp[0] != temp[1]:
       qry_id = str(temp[0])
       ref_id = str(temp[1])
-      evalue = float(temp[evcol])
       bit_scr = float(temp[bscol])
       qry_len = float(temp[qlcol])
       ref_len = float(temp[slcol])
+
+      evalue = float(temp[evcol])
+      #BLAST 2.2.28+ rounds E-values smaller than 1e-180 to zero
+      if evalue == 0:
+        evalue = float(1e-181)
 
       if met_grf.has_node(qry_id) and met_grf.has_node(ref_id):
         qry_sbs = met_grf.node[qry_id]['sbs']
