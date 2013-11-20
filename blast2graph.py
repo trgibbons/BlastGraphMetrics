@@ -244,7 +244,7 @@ def normalize_bit_score_ratios(met_grf, idchar, org_avgs):
 
     for met in mets:
       scale = glb_avg[met] / org_avgs[qry_org][ref_org][met+'_avg']
-      met_grf[qry_id][ref_id][met] = met_grf[qry_id][ref_id][met] * scale
+      met_grf[qry_id][ref_id][met] *= scale
 
 
 
