@@ -147,35 +147,31 @@ def get_metrics(met_grf, blast_handle,
       continue
 
     if temp[0] != temp[1]:
+      metrics = dict()
       qry_id = str(temp[0])
       ref_id = str(temp[1])
-      bit_scr = float(temp[bscol])
       qry_len = float(temp[qlcol])
       ref_len = float(temp[slcol])
-
-      evalue = float(temp[evcol])
+      metrics['bit'] = float(temp[bscol])
+      metrics['evl'] = float(temp[evcol])
       #BLAST 2.2.28+ rounds E-values smaller than 1e-180 to zero
-      if evalue == 0:
-        evalue = float(1e-181)
+      if metrics['evl'] == 0:
+        metrics['evl'] = float(1e-181)
 
       if met_grf.has_node(qry_id) and met_grf.has_node(ref_id):
         qry_sbs = met_grf.node[qry_id]['sbs']
         ref_sbs = met_grf.node[ref_id]['sbs']
-        bpb = bit_scr / min(qry_len, ref_len)
-        bsr = bit_scr / min(qry_sbs, ref_sbs)
+        metrics['bpb'] = metrics['bit'] / min(qry_len, ref_len)
+        metrics['bsr'] = metrics['bit'] / min(qry_sbs, ref_sbs)
 
         if not met_grf.has_edge(qry_id, ref_id):
-          met_grf.add_edge(
-            qry_id, ref_id, evl=evalue, bit=bit_scr, bpb=bpb, bsr=bsr)
-        else:
-          if evalue < met_grf[qry_id][ref_id]['evl']:
-            met_grf[qry_id][ref_id]['evl'] = evalue
-          if bit_scr > met_grf[qry_id][ref_id]['bit']:
-            met_grf[qry_id][ref_id]['bit'] = bit_scr
-          if bpb > met_grf[qry_id][ref_id]['bpb']:
-            met_grf[qry_id][ref_id]['bpb'] = bpb
-          if bsr > met_grf[qry_id][ref_id]['bsr']:
-            met_grf[qry_id][ref_id]['bsr'] = bsr
+          met_grf.add_edge(qry_id, ref_id)
+          for met in metrics.keys():
+            met_grf[qry_id][ref_id][met] = metrics[met]
+
+        elif metrics['bit'] > met_grf[qry_id][ref_id]['bit']:
+          for met in metrics.keys():
+            met_grf[qry_id][ref_id][met] = metrics[met]
 
 
 
@@ -191,54 +187,37 @@ def compute_organism_averages(met_grf, idchar, org_ids):
   """
   org_avgs = nx.Graph()
 
+  mets = ['evl','bit','bpb','bsr']
+
   for qry_id, ref_id, edata in met_grf.edges(data=True):
     qry_org = qry_id.split(idchar)[0]
     ref_org = ref_id.split(idchar)[0]
 
     if org_avgs.has_edge(qry_org, ref_org):
       org_avgs[qry_org][ref_org]['cnt'] += 1
-      org_avgs[qry_org][ref_org]['evl_sum'] += edata['evl']
-      org_avgs[qry_org][ref_org]['bit_sum'] += edata['bit']
-      org_avgs[qry_org][ref_org]['bpb_sum'] += edata['bpb']
-      org_avgs[qry_org][ref_org]['bsr_sum'] += edata['bsr']
+      for met in mets:
+        org_avgs[qry_org][ref_org][met+'_sum'] += edata[met]
     else:
-      org_avgs.add_edge(
-        qry_org, ref_org, cnt=1,
-        evl_sum=edata['evl'], evl_avg=None,
-        bit_sum=edata['bit'], bit_avg=None,
-        bpb_sum=edata['bpb'], bpb_avg=None,
-        bsr_sum=edata['bsr'], bsr_avg=None)
+      org_avgs.add_edge(qry_org, ref_org, cnt=1)
+      for met in mets:
+        org_avgs[qry_org][ref_org][met+'_sum'] = edata[met]
+        org_avgs[qry_org][ref_org][met+'_avg'] = None
 
   org_avgs.add_node('global', cnt=0,
                     evl_sum=0., bit_sum=0., bpb_sum=0., bsr_sum=0.)
+
   for qry_org, ref_org, edata in org_avgs.edges(data=True):
     org_avgs.node['global']['cnt'] += edata['cnt']
 
-    org_avgs.node['global']['evl_sum'] += edata['evl_sum'] #float
-    org_avgs[qry_org][ref_org]['evl_avg'] = edata['evl_sum']/edata['cnt']
-
-    org_avgs.node['global']['bit_sum'] += edata['bit_sum'] #float
-    org_avgs[qry_org][ref_org]['bit_avg'] = edata['bit_sum']/edata['cnt']
-
-    org_avgs.node['global']['bpb_sum'] += edata['bpb_sum'] #float
-    org_avgs[qry_org][ref_org]['bpb_avg'] = edata['bpb_sum']/edata['cnt']
-
-    org_avgs.node['global']['bsr_sum'] += edata['bsr_sum'] #float
-    org_avgs[qry_org][ref_org]['bsr_avg'] = edata['bsr_sum']/edata['cnt']
+    for met in mets:
+      org_avgs.node['global'][met+'_sum'] += edata[met+'_sum']
+      org_avgs[qry_org][ref_org][met+'_avg'] = edata[met+'_sum']/edata['cnt']
 
   glb_cnt = org_avgs.node['global']['cnt']
 
-  glb_evl_sum = org_avgs.node['global']['evl_sum'] #float
-  org_avgs.node['global']['evl_avg'] = glb_evl_sum/glb_cnt
-
-  glb_bit_sum = org_avgs.node['global']['bit_sum'] #float
-  org_avgs.node['global']['bit_avg'] = glb_bit_sum/glb_cnt
-
-  glb_bpb_sum = org_avgs.node['global']['bpb_sum'] #float
-  org_avgs.node['global']['bpb_avg'] = glb_bpb_sum/glb_cnt
-
-  glb_bsr_sum = org_avgs.node['global']['bsr_sum'] #float
-  org_avgs.node['global']['bsr_avg'] = glb_bsr_sum/glb_cnt
+  for met in mets:
+    met_sum = org_avgs.node['global'][met+'_sum'] #float
+    org_avgs.node['global'][met+'_avg'] = met_sum/glb_cnt
 
   return org_avgs
 
@@ -253,44 +232,36 @@ def normalize_bit_score_ratios(met_grf, idchar, org_avgs):
   Convert Bit Scores into Bit Score Ratios and account for intra-/inter- 
   organism differences, if requested
   """
-  glb_evl_avg = org_avgs.node['global']['evl_avg']
-  glb_bit_avg = org_avgs.node['global']['bit_avg']
-  glb_bpb_avg = org_avgs.node['global']['bpb_avg']
-  glb_bsr_avg = org_avgs.node['global']['bsr_avg']
+  mets = ['evl','bit','bpb','bsr']
+  glb_avg = dict()
+
+  for met in mets:
+    glb_avg[met] = org_avgs.node['global'][met+'_avg']
 
   for qry_id, ref_id, edata in met_grf.edges(data=True):
     qry_org = qry_id.split(idchar)[0]
     ref_org = ref_id.split(idchar)[0]
 
-    evl_scl = glb_evl_avg / org_avgs[qry_org][ref_org]['evl_avg']
-    bit_scl = glb_bit_avg / org_avgs[qry_org][ref_org]['bit_avg']
-    bpb_scl = glb_bpb_avg / org_avgs[qry_org][ref_org]['bpb_avg']
-    bsr_scl = glb_bsr_avg / org_avgs[qry_org][ref_org]['bsr_avg']
-
-    raw_evl_avg = met_grf[qry_id][ref_id]['evl']
-    raw_bit_avg = met_grf[qry_id][ref_id]['bit']
-    raw_bpb_avg = met_grf[qry_id][ref_id]['bpb']
-    raw_bsr_avg = met_grf[qry_id][ref_id]['bsr']
-
-    met_grf[qry_id][ref_id]['evl'] = raw_evl_avg * evl_scl
-    met_grf[qry_id][ref_id]['bit'] = raw_bit_avg * bit_scl
-    met_grf[qry_id][ref_id]['bpb'] = raw_bpb_avg * bpb_scl
-    met_grf[qry_id][ref_id]['bsr'] = raw_bsr_avg * bsr_scl
+    for met in mets:
+      scale = glb_avg[met] / org_avgs[qry_org][ref_org][met+'_avg']
+      met_grf[qry_id][ref_id][met] = met_grf[qry_id][ref_id][met] * scale
 
 
 
 def print_abc_files(met_grf, out_pref):
   """Print MCL-formatted .abc graph files"""
-  evl_hdl = open(out_pref+'_evl.abc', 'w')
-  bit_hdl = open(out_pref+'_bit.abc', 'w')
-  bpb_hdl = open(out_pref+'_bpb.abc', 'w')
-  bsr_hdl = open(out_pref+'_bsr.abc', 'w')
+  metrics = ['evl','bit','bpb','bsr']
+  handle = dict()
+
+  for met in metrics:
+    handle[met] = open(out_pref+'_'+met+'.abc', 'w')
 
   for qry_id, ref_id, edata in met_grf.edges(data=['evl','bit','bpb','bsr']):
-    evl_hdl.write('{0}\t{1}\t{2}\n'.format(qry_id, ref_id, edata['evl']))
-    bit_hdl.write('{0}\t{1}\t{2}\n'.format(qry_id, ref_id, edata['bit']))
-    bpb_hdl.write('{0}\t{1}\t{2}\n'.format(qry_id, ref_id, edata['bpb']))
-    bsr_hdl.write('{0}\t{1}\t{2}\n'.format(qry_id, ref_id, edata['bsr']))
+    for met in metrics:
+      handle[met].write('{0}\t{1}\t{2}\n'.format(qry_id, ref_id, edata[met]))
+
+  for met in metrics:
+    handle[met].close()
 
 
 
@@ -312,7 +283,7 @@ def main(argv=None):
   args = get_parsed_args() 
 
   met_grf = nx.Graph() #NetworkX graph containing various BLAST-based metrics
-  org_ids = set() #Organism IDs
+  org_ids = set()
 
   get_self_bit_scores_and_org_ids(met_grf=met_grf, blast_handle=args.blast,
                                   idchar=args.idchar, org_ids=org_ids,
@@ -327,11 +298,11 @@ def main(argv=None):
 
   print_abc_files(met_grf, args.out_pref+"_raw")
 
-  org_avgs = compute_organism_averages(met_grf=met_grf,
-                                       idchar=args.idchar, org_ids=org_ids)
+  org_avgs = compute_organism_averages(
+               met_grf=met_grf, idchar=args.idchar, org_ids=org_ids)
 
-  normalize_bit_score_ratios(met_grf=met_grf,
-                             idchar=args.idchar, org_avgs=org_avgs)
+  normalize_bit_score_ratios(
+    met_grf=met_grf, idchar=args.idchar, org_avgs=org_avgs)
 
   print_abc_files(met_grf, args.out_pref+"_norm")
 
