@@ -27,10 +27,10 @@ def get_parsed_args():
 
   parser.add_argument('--whog', dest='whog', default=False,
                       type=argparse.FileType('r'),
-                      help='whog file that comes with the COG/COG database')
-  parser.add_argument('--twog', dest='twog', default=False,
+                      help='whog file that comes with the COG database')
+  parser.add_argument('--kog', dest='kog', default=False,
                       type=argparse.FileType('r'),
-                      help='twog file that comes with the COG/KOG database')
+                      help='kog file that comes with the KOG database')
   parser.add_argument('fasta', type=argparse.FileType('r'),
                       help='Either the myva (COG) or kyva (KOG) FASTA file')
   parser.add_argument('out', type=argparse.FileType('w'),
@@ -43,17 +43,25 @@ def get_parsed_args():
 
 
 def parse_whog(whog):
-  """Prepare new COG/COG seq IDs from the whog file"""
+  """Prepare new COG/COG seq IDs from the whog file
+  
+  Args:
+    whog: A readable handle for the whog file
+  
+  Returns:
+    new_ids: A dictionary mapping expanded sequence IDs onto the old ones
+  """
   new_ids = dict()
 
   for line in whog:
     temp = line.strip().split()
   
-    if line == '\n':
+    if not temp:
       continue
-    elif line == '_______\n':
+
+    elif temp[0] == '_______':
       continue
-  
+
     elif temp[0][0] == '[':
       fun = str(temp[0])
       cog = str(temp[1])
@@ -68,9 +76,39 @@ def parse_whog(whog):
 
 
 
-def parse_twog(twog):
-  """Prepare new KOG seq IDs from the twog file"""
+def parse_kog(kog):
+  """Prepare new KOG seq IDs from the kog file
+  
+  Args:
+    kog: A readable handle for the kog file
+  
+  Returns:
+    new_ids: A dictionary mapping expanded sequence IDs onto the old ones
+  """
+  new_ids = dict()
+  debug = open('debug', 'w')
 
+  for line in kog:
+    debug.write(line)
+    temp = line.strip().split()
+    debug.write(','.join(temp)+'\n')
+  
+    if not temp:
+      continue
+
+    elif temp[0][0] == '[':
+      fun = str(temp[0])
+      cog = str(temp[1])
+      des = ' '.join(temp[2:])
+
+    else:
+      org = temp[0].rstrip(':')
+      for seq in temp[1:]:
+        new_ids[seq] = '{0}|{1}___{2}\t{3}\t{4}'.format(org, seq, cog, fun, des)
+
+  debug.close()
+
+  return new_ids
 
 
 
@@ -103,18 +141,18 @@ def main(argv=None):
 
   args = get_parsed_args()
 
-  if args.whog and args.twog:
-    raise SystemExit('The --whog and --twog arguments are incompatible. Please '+
+  if args.whog and args.kog:
+    raise SystemExit('The --kog and --twog arguments are incompatible. Please '+
                     'specify only one and provide the corresponding FASTA '+
-                    'file (myva for whog, kyva for twog)')
+                    'file (myva for whog, kyva for kog)')
   elif args.whog:
     new_ids = parse_whog(args.whog)
-  elif args.twog:
-    new_ids = parse_twog(args.twog)
+  elif args.kog:
+    new_ids = parse_kog(args.kog)
   else:
-    raise SystemExit('Must provide exactly one of --whog and --twog along with '+
+    raise SystemExit('Must provide exactly one of --whog and --kog along with '+
                     'the corresponding FASTA file (myva for whog, kyva for '+
-                    'twog)')
+                    'kog)')
 
   reformat_fasta(new_ids=new_ids, fasta=args.fasta, out=args.out)
 
