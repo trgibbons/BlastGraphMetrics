@@ -31,6 +31,10 @@ def get_parsed_args():
   parser.add_argument('--kog', dest='kog', default=False,
                       type=argparse.FileType('r'),
                       help='kog file that comes with the KOG database')
+  parser.add_argument('--stats', dest='stats', default=False,
+                      type=argparse.FileType('w'),
+                      help='Optional output file for statistics about each '+
+                           'COG/KOG sequence (formatted for R)')
   parser.add_argument('fasta', type=argparse.FileType('r'),
                       help='Either the myva (COG) or kyva (KOG) FASTA file')
   parser.add_argument('out', type=argparse.FileType('w'),
@@ -103,8 +107,9 @@ def parse_kog(kog):
 
     else:
       org = temp[0].rstrip(':')
-      for seq in temp[1:]:
-        new_ids[seq] = '{0}|{1}___{2}\t{3}\t{4}'.format(org, seq, cog, fun, des)
+      for seq_id in temp[1:]:
+        new_ids[seq_id] = (org, cog, fun, des)
+        #new_ids[seq] = '{0}|{1}___{2}\t{3}\t{4}'.format(org, seq, cog, fun, des)
 
   debug.close()
 
@@ -112,12 +117,42 @@ def parse_kog(kog):
 
 
 
-def reformat_fasta(new_ids, fasta, out):
+def reformat_fasta(new_ids, fasta, out, stats=False):
+  """Read in and reprint a FASTA file with modified header lines
+  
+  Args:
+    new_ids: Dictionary of tuples containing information about COG sequences:
+      (organism_ID, COG_ID, COG_functional_code, COG_description)
+    fasta: An open file handle to a readable cog FASTA file
+    out: An open file handle to a writable output FASTA file
+    stats: An optional open file handle to a writable output Rtab file
+
+  Returns:
+    None - Just writes files
+  """
+  if stats:
+    stats_header = 'SeqID\tOrgID\tCogID\tLength\t'
+    stats_header += '\t'.join("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    stats.write(stats_header+'\n')
+
   for record in SeqIO.parse(fasta, 'fasta'):
     old_id = record.id
     seq = record.seq
+    seq_len = len(seq)
     if old_id in new_ids:
-      out.write('>{0}\n{1}\n'.format(new_ids[old_id], seq))
+      org, cog, fun, des = new_ids[old_id]
+      new_id = '{0}|{1}___{2}\t{3}\t{4}'.format(org, old_id, cog, fun, des)
+      out.write('>{0}\n{1}\n'.format(new_id, seq))
+      if stats:
+        stats_list = [old_id, org, cog, str(seq_len)]
+        stats_list += [str(seq.count(x)) for x in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
+        stats_line = '\t'.join(stats_list)
+        stats.write(stats_line+'\n')
+    elif stats:
+        stats_list = [old_id, "NA", "NA", str(seq_len)]
+        stats_list += [str(seq.count(x)) for x in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
+        stats_line = '\t'.join(stats_list)
+        stats.write(stats_line+'\n')
 
 
 
@@ -154,7 +189,8 @@ def main(argv=None):
                     'the corresponding FASTA file (myva for whog, kyva for '+
                     'kog)')
 
-  reformat_fasta(new_ids=new_ids, fasta=args.fasta, out=args.out)
+  reformat_fasta(
+    new_ids=new_ids, fasta=args.fasta, out=args.out, stats=args.stats)
 
 
 
