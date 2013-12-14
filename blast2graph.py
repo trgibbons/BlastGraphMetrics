@@ -146,6 +146,7 @@ def get_metrics(met_grf, blast_handle,
     if temp[0][0] == "#":
       continue
 
+    #TODO: Remove self-hits filter
     if temp[0] != temp[1]:
       metrics = dict()
       qry_id = str(temp[0])
@@ -187,7 +188,7 @@ def compute_organism_averages(met_grf, idchar, org_ids):
   """
   org_avgs = nx.Graph()
 
-  mets = ['evl','bit','bpb','bsr']
+  metrics = ['evl','bit','bpb','bsr']
 
   for qry_id, ref_id, edata in met_grf.edges(data=True):
     qry_org = qry_id.split(idchar)[0]
@@ -195,13 +196,17 @@ def compute_organism_averages(met_grf, idchar, org_ids):
 
     if org_avgs.has_edge(qry_org, ref_org):
       org_avgs[qry_org][ref_org]['cnt'] += 1
-      for met in mets:
+      for met in metrics:
         org_avgs[qry_org][ref_org][met+'_sum'] += edata[met]
     else:
       org_avgs.add_edge(qry_org, ref_org, cnt=1)
-      for met in mets:
+      for met in metrics:
         org_avgs[qry_org][ref_org][met+'_sum'] = edata[met]
         org_avgs[qry_org][ref_org][met+'_avg'] = None
+
+    #A new E-value minimum will need to be chosen after normaliztion
+    if met_grf[qry_id][ref_id]['evl'] == '1e-181':
+      met_grf[qry_id][ref_id]['evl'] = None
 
   org_avgs.add_node('global', cnt=0,
                     evl_sum=0., bit_sum=0., bpb_sum=0., bsr_sum=0.)
@@ -209,13 +214,13 @@ def compute_organism_averages(met_grf, idchar, org_ids):
   for qry_org, ref_org, edata in org_avgs.edges(data=True):
     org_avgs.node['global']['cnt'] += edata['cnt']
 
-    for met in mets:
+    for met in metrics:
       org_avgs.node['global'][met+'_sum'] += edata[met+'_sum']
       org_avgs[qry_org][ref_org][met+'_avg'] = edata[met+'_sum']/edata['cnt']
 
   glb_cnt = org_avgs.node['global']['cnt']
 
-  for met in mets:
+  for met in metrics:
     met_sum = org_avgs.node['global'][met+'_sum'] #float
     org_avgs.node['global'][met+'_avg'] = met_sum/glb_cnt
 
@@ -232,19 +237,40 @@ def normalize_bit_score_ratios(met_grf, idchar, org_avgs):
   Convert Bit Scores into Bit Score Ratios and account for intra-/inter- 
   organism differences, if requested
   """
-  mets = ['evl','bit','bpb','bsr']
+  metrics = ['evl','bit','bpb','bsr']
   glb_avg = dict()
 
-  for met in mets:
+  for met in metrics:
     glb_avg[met] = org_avgs.node['global'][met+'_avg']
+
+  max_scl = float("-inf")
+  min_evl = float("inf")
 
   for qry_id, ref_id, edata in met_grf.edges(data=True):
     qry_org = qry_id.split(idchar)[0]
     ref_org = ref_id.split(idchar)[0]
 
-    for met in mets:
+    for met in metrics:
+      if met == 'evl' and met_grf[qry_id][ref_id][met] == None:
+          continue
+
       scale = glb_avg[met] / org_avgs[qry_org][ref_org][met+'_avg']
       met_grf[qry_id][ref_id][met] *= scale
+
+      if met == 'evl':
+        if scale > max_scl:
+          max_scl = scale
+        if met_grf[qry_id][ref_id]['evl'] < min_evl:
+          min_evl = met_grf[qry_id][ref_id]['evl']
+
+  zro_evl = min_evl/(10*max_scl)
+
+  for qry_id, ref_id, edata in met_grf.edges(data=True):
+    if met_grf[qry_id][ref_id]['evl'] == None:
+      qry_org = qry_id.split(idchar)[0]
+      ref_org = ref_id.split(idchar)[0]
+      scale = glb_avg[met] / org_avgs[qry_org][ref_org][met+'_avg']
+      met_grf[qry_id][ref_id][met] = zro_evl*scale
 
 
 
