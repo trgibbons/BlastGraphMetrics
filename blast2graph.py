@@ -43,7 +43,7 @@ def main(argv=None):
 
     print_abc_files(met_grf, args.out_pref+"_raw")
 
-    metrics = ['evl', 'bit', 'bpb', 'bsr']
+    metrics = ['evl', 'bit', 'bpr', 'bsr']
 
     org_avgs = compute_organism_averages(met_grf=met_grf, metrics=metrics,
                                          idchar=args.idchar, org_ids=org_ids)
@@ -228,7 +228,7 @@ def get_metrics(met_grf, blast_handle,
 
         if met_grf.has_node(qry_id) and met_grf.has_node(ref_id):
             # Compute 'bit per base', which should really be per amino acid
-            metrics['bpb'] = metrics['bit'] / min(qry_len, ref_len)
+            metrics['bpr'] = metrics['bit'] / min(qry_len, ref_len)
             # Compute bit score ratio
             qry_sbs = met_grf.node[qry_id]['sbs']
             ref_sbs = met_grf.node[ref_id]['sbs']
@@ -298,7 +298,7 @@ def compute_global_averags(org_avgs, metrics):
     """
     # The 'global' node has degree 0
     org_avgs.add_node('global', cnt=0,
-                      evl_sum=0., bit_sum=0., bpb_sum=0., bsr_sum=0.)
+                      evl_sum=0., bit_sum=0., bpr_sum=0., bsr_sum=0.)
 
     for qry_org, ref_org, edata in org_avgs.edges(data=True):
         org_avgs.node['global']['cnt'] += edata['cnt']
@@ -367,7 +367,7 @@ def normalize_bit_score_ratios(met_grf, metrics, idchar, org_avgs):
 
 def print_abc_files(met_grf, out_pref):
     """Print MCL-formatted .abc graph files"""
-    metrics = ['evl', 'bit', 'bpb', 'bsr']
+    metrics = ['evl', 'bit', 'bpr', 'bsr']
     handle = dict()
 
     for met in metrics:
