@@ -217,7 +217,7 @@ def score_clustering(mcl_file):
         out_line = ''
         for k, v in sorted(kog_counts.iteritems()):
             out_line += str(k)+':'+str(v)+'\t'
-        per_cluster_stats.write(out_line.rstrip())
+        per_cluster_stats.write(out_line.rstrip()+'\n')
 
         # Track number of clusters containing a certain number of KOGs
         try:
