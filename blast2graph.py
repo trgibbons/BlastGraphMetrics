@@ -29,6 +29,7 @@ def main(argv=None):
 
     met_grf = nx.Graph()  # NetworkX graph with various BLAST-based metrics
     org_ids = set()
+    metrics = ['bit', 'bpr', 'bsr', 'evl', 'pev']
 
     get_self_bit_scores_and_org_ids(met_grf=met_grf, blast_handle=args.blast,
                                     idchar=args.idchar, org_ids=org_ids,
@@ -41,19 +42,19 @@ def main(argv=None):
                 evcol=args.evcol-1, bscol=args.bscol-1,
                 qlcol=args.qlcol-1, slcol=args.slcol-1)
 
-    print_abc_files(met_grf, args.out_pref+"_raw")
-
-    metrics = ['evl', 'bit', 'bpr', 'bsr']
+    print_abc_files(met_grf=met_grf, metrics=metrics,
+                    out_pref=str(args.out_pref)+"_raw")
 
     org_avgs = compute_organism_averages(met_grf=met_grf, metrics=metrics,
                                          idchar=args.idchar, org_ids=org_ids)
 
-    compute_global_averags(org_avgs=org_avgs, metrics=metrics)
+    compute_global_averages(org_avgs=org_avgs, metrics=metrics)
 
-    normalize_bit_score_ratios(met_grf=met_grf, metrics=metrics,
-                               idchar=args.idchar, org_avgs=org_avgs)
+    normalize_metrics(met_grf=met_grf, metrics=metrics,
+                      idchar=args.idchar, org_avgs=org_avgs)
 
-    print_abc_files(met_grf, args.out_pref+"_nrm")
+    print_abc_files(met_grf=met_grf, metrics=metrics,
+                    out_pref=str(args.out_pref)+"_nrm")
 
 
 def get_parsed_args():
@@ -169,7 +170,7 @@ def get_self_bit_scores_and_org_ids(
             org_ids.add(seq_id.split(idchar)[0])
 
             if not met_grf.has_node(seq_id):
-                met_grf.add_node(seq_id, sbs=bit_scr, org=None)
+                met_grf.add_node(seq_id, sbs=bit_scr)
             elif bit_scr > met_grf.node[seq_id]['sbs']:
                 met_grf.node[seq_id]['sbs'] = bit_scr
 
@@ -190,6 +191,10 @@ def get_metrics(met_grf, blast_handle,
     have a greater score than the ones that have already been found. One
     consequence of this is that the intra- and inter-organism average scores
     can not be calculated on the fly.
+
+    I convinced myself that removing self-hits from the graph would result in
+    more accurate intra-/inter-organism averages and improve normalization.
+    They are now removed during printing.
 
     Args:
         bsr_graph: A NetworkX graph data structure containing self-alignment
@@ -212,37 +217,40 @@ def get_metrics(met_grf, blast_handle,
         elif temp[0][0] == "#":
             continue
 
-        # I convinced myself that removing self-hits from the graph would
-        # results in more accurate intra-/inter-organism averages and improve
-        # normalization. They are removed before printing.
         metrics = dict()
         qry_id = str(temp[0])
         ref_id = str(temp[1])
-        qry_len = float(temp[qlcol])
-        ref_len = float(temp[slcol])
-        metrics['bit'] = float(temp[bscol])
-        metrics['evl'] = float(-Decimal(temp[evcol]).log10())
-        #BLAST 2.2.28+ rounds E-values smaller than 1e-180 to zero
-        if metrics['evl'] == float('inf'):
-            metrics['evl'] = 181.
 
         if met_grf.has_node(qry_id) and met_grf.has_node(ref_id):
-            # Compute 'bit per base', which should really be per amino acid
+            qry_len = float(temp[qlcol])
+            ref_len = float(temp[slcol])
+            metrics['bit'] = float(temp[bscol])
+            metrics['evl'] = Decimal(temp[evcol])
+
+            #BLAST 2.2.28+ rounds E-values smaller than 1e-180 to zero
+            if metrics['evl'] == 0:
+                metrics['evl'] = Decimal(1e-181)
+
+            # Compute -log10 'p()' of the E-value
+            metrics['pev'] = float(-metrics['evl'].log10())
+
+            # Compute 'bit per residue'
             metrics['bpr'] = metrics['bit'] / min(qry_len, ref_len)
-            # Compute bit score ratio
+
+            # Compute 'bit score ratio'
             qry_sbs = met_grf.node[qry_id]['sbs']
             ref_sbs = met_grf.node[ref_id]['sbs']
             metrics['bsr'] = metrics['bit'] / min(qry_sbs, ref_sbs)
 
-        if not met_grf.has_edge(qry_id, ref_id):
-            met_grf.add_edge(qry_id, ref_id)
-            for met in metrics.keys():
-                met_grf[qry_id][ref_id][met] = metrics[met]
+            if not met_grf.has_edge(qry_id, ref_id):
+                met_grf.add_edge(qry_id, ref_id)
+                for met in metrics.keys():
+                    met_grf[qry_id][ref_id][met] = metrics[met]
 
-        # Best bit score = best hit
-        elif metrics['bit'] > met_grf[qry_id][ref_id]['bit']:
-            for met in metrics.keys():
-                met_grf[qry_id][ref_id][met] = metrics[met]
+            # Largest bit score => best hit
+            elif metrics['bit'] > met_grf[qry_id][ref_id]['bit']:
+                for met in metrics.keys():
+                    met_grf[qry_id][ref_id][met] = metrics[met]
 
 
 def compute_organism_averages(met_grf, metrics, idchar, org_ids):
@@ -277,14 +285,16 @@ def compute_organism_averages(met_grf, metrics, idchar, org_ids):
                 org_avgs[qry_org][ref_org][met+'_sum'] = edata[met]
                 org_avgs[qry_org][ref_org][met+'_avg'] = None
 
-        # A new E-value minimum will need to be chosen after normaliztion
-        if edata['evl'] == 181.:
+        # Heuristically chosen E-value based metrics must be recalculated after
+        # normalization to guarantee that the two ranges do not overlap
+        if edata['pev'] == float(181):
             met_grf[qry_id][ref_id]['evl'] = None
+            met_grf[qry_id][ref_id]['pev'] = None
 
     return org_avgs
 
 
-def compute_global_averags(org_avgs, metrics):
+def compute_global_averages(org_avgs, metrics):
     """Compute global averages for the entire graph
 
     Args:
@@ -298,7 +308,8 @@ def compute_global_averags(org_avgs, metrics):
     """
     # The 'global' node has degree 0
     org_avgs.add_node('global', cnt=0,
-                      evl_sum=0., bit_sum=0., bpr_sum=0., bsr_sum=0.)
+                      bit_sum=float(0), bpr_sum=float(0), bsr_sum=float(0),
+                      evl_sum=Decimal(0), pev_sum=float(0))
 
     for qry_org, ref_org, edata in org_avgs.edges(data=True):
         org_avgs.node['global']['cnt'] += edata['cnt']
@@ -311,63 +322,76 @@ def compute_global_averags(org_avgs, metrics):
     glb_cnt = org_avgs.node['global']['cnt']
 
     for met in metrics:
-        met_sum = org_avgs.node['global'][met+'_sum']  # float
+        met_sum = org_avgs.node['global'][met+'_sum']  # floats or Decimals
         org_avgs.node['global'][met+'_avg'] = met_sum/glb_cnt
 
 
-def normalize_bit_score_ratios(met_grf, metrics, idchar, org_avgs):
-    """Convert Bit Scores into Bit Score Ratios
+def normalize_metrics(met_grf, metrics, idchar, org_avgs):
+    """Normalize metrics to adjust for average inter-organism divergence
 
-    Iterates through the edges in a NetworkX graph, dividing all
-    cross-alignment scores by either the smaller or larger of the two
-    self-alignment scores
+    Iterates through the edges in a NetworkX graph, multiplying each metric
+    used to weight each edge by a ratio of the average score for that metric
+    across the entire graph over the average score for that metric between
+    the pair of organisms connected by that particular edge.
 
-    Convert Bit Scores into Bit Score Ratios and account for intra-/inter-
-    organism differences, if requested
+    BLAST-rounded E-values and corresponding p(E-values) should be set to zero
+    in the metrics graph before calling normalize_metrics(). This function will
+    then scale the rest of the graph and identify the largest p(E-value) and
+    most minimizing scaling factor. It will then generate a supplemental
+    heuristic distribution for the BLAST-rounded values that is guaranteed to
+    lie beyond the limits of the real distribution. Lastly, it will convert
+    this distribution back into E-values. Supplemental E-values are not
+    computed directly because they are more prone to rounding errors and
+    because manipulating floats offers significant performance benefits.
     """
     glb_avg = dict()
 
     for met in metrics:
         glb_avg[met] = org_avgs.node['global'][met+'_avg']
 
-    min_scl = float("inf")  # Minimum scaling factor
-    max_evl = float("-inf")  # Maximum observed -log10(E-value)
+    max_pev = float("-inf")  # Largest observed post-scaling p(E-value)
+    min_pev_scl = float("inf")  # Smallest p(E-value) scaling factor
 
     for qry_id, ref_id, edata in met_grf.edges(data=True):
         qry_org = qry_id.split(idchar)[0]
         ref_org = ref_id.split(idchar)[0]
 
         for met in metrics:
-            # Handle BLAST-rounded E-values separately
-            if met == 'evl' and edata[met] is None:
+            # Handle BLAST-rounded E-values and p(E-values) separately
+            if edata[met] is None:
                 continue
 
+            # Scale bit score based metrics
             scale = glb_avg[met] / org_avgs[qry_org][ref_org][met+'_avg']
             met_grf[qry_id][ref_id][met] *= scale
 
-            if met == 'evl':
-                if scale < min_scl:
-                    min_scl = scale
-                if edata['evl'] > max_evl:
-                    max_evl = edata['evl']
+            # Capture extreme values for p(E-value) distribution after
+            # normalization
+            if met == 'pev':
+                if edata['pev'] > max_pev:
+                    max_pev = edata['pev']
+                if scale < min_pev_scl:
+                    min_pev_scl = scale
 
-    # max_evalue + gap = zero_evalue * min_scale
-    gap = 10
-    min_zro_evl = max_evl + gap
-    zro_evl = min_zro_evl / min_scl
+    # max(p(E-value)) + gap = zero_p(E-value) * min(scale)
+    pev_gap = float(10)
+    min_zro_pev = max_pev + pev_gap
+    zro_pev = min_zro_pev / min_pev_scl
 
     for qry_id, ref_id, edata in met_grf.edges(data=True):
-        #if met_grf[qry_id][ref_id]['evl'] is None:
-        if not met_grf[qry_id][ref_id]['evl']:
+        if not met_grf[qry_id][ref_id]['pev']:
             qry_org = qry_id.split(idchar)[0]
             ref_org = ref_id.split(idchar)[0]
+
             scale = glb_avg[met] / org_avgs[qry_org][ref_org][met+'_avg']
-            met_grf[qry_id][ref_id]['evl'] = zro_evl*scale
+            met_grf[qry_id][ref_id]['pev'] = zro_pev*scale
+
+            tmp_pev = Decimal(10 ** -met_grf[qry_id][ref_id]['pev'])
+            met_grf[qry_id][ref_id]['evl'] = tmp_pev
 
 
-def print_abc_files(met_grf, out_pref):
+def print_abc_files(met_grf, metrics, out_pref):
     """Print MCL-formatted .abc graph files"""
-    metrics = ['evl', 'bit', 'bpr', 'bsr']
     handle = dict()
 
     for met in metrics:
