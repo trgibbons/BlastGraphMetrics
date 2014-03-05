@@ -18,7 +18,7 @@ kpc <- read.table(args[2], header=TRUE)
 # Create ggplot object for Clusters per KOG statistics
 cpk$Metric <- factor(cpk$Metric,
                      levels=c("BitScore","BitPerResidue","BitScoreRatio",
-                              "Evalue"))
+                              "Evalue", "p(Evalue)"))
 cpk.gg <- ggplot(data=cpk,
                  aes(x=Inflation, y=ClustersPerKOG, fill=KOGCount))
 cpk.gg <- cpk.gg +geom_tile(color="grey42")
@@ -29,13 +29,13 @@ cpk.gg <- cpk.gg +theme(axis.title.x=element_blank(),
 cpk.gg <- cpk.gg +theme(strip.text.x=element_blank(),
                         strip.background=element_blank())
 cpk.gg <- cpk.gg +scale_fill_gradientn(name=element_blank(), colours=rp,
-                                       limits=c(1,458))
+                                       limits=c(1,max(cpk$KOGCount)))
 
 
 # Create ggplot object for KOGs per Cluster statistics
 kpc$Metric <- factor(kpc$Metric,
                      levels=c("BitScore","BitPerResidue","BitScoreRatio",
-                              "Evalue"))
+                              "Evalue", "p(Evalue)"))
 kpc.gg <- ggplot(data=kpc,
                  aes(x=Inflation, y=KOGsPerCluster,fill=ClusterCount))
 kpc.gg <- kpc.gg +geom_tile(color="grey42")
@@ -46,7 +46,7 @@ kpc.gg <- kpc.gg +theme(axis.title.x=element_blank(),
 kpc.gg <- kpc.gg +theme(strip.text.x=element_blank(),
                         strip.background=element_blank())
 kpc.gg <- kpc.gg +scale_fill_gradientn(name=element_blank(), colours=rp,
-                                       limits=c(1,600))
+                                       limits=c(1,max(kpc$ClusterCount)))
 
 
 # Get prefixes for output files
