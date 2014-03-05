@@ -143,11 +143,13 @@ def parse_file_name(mcl_file_name):
         mtrc = "BitScoreRatio"
     elif re.search('_evl', mcl_file_name):
         mtrc = "Evalue"
+    elif re.search('_pev', mcl_file_name):
+        mtrc = "p(Evalue)"
     else:
         raise Exception(
             "Could not determine metric used for file "+mcl_file_name+". " +
             "Make sure file names contain one of '_bit', '_bpr', '_bsr', " +
-            "or '_evl'.")
+            "'_evl', or '_pev'.")
 
     # Identify inflation parameter used by MCL
     if re.search('I\d{2}', mcl_file_name):
