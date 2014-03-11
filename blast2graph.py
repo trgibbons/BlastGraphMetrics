@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 # Standard Python libraries
+from sys import stderr
 import sys
 import argparse
 from decimal import Decimal
@@ -56,6 +57,11 @@ def main(argv=None):
     print_abc_files(met_grf=met_grf, metrics=metrics,
                     out_pref=str(args.out_pref)+"_nrm")
 
+    if args.fasta:
+        print_connected_component_fasta_files(met_grf=met_grf,
+                                              fasta_handle=args.fasta,
+                                              out_pref=args.out_pref)
+
 
 def get_parsed_args():
     """Parse the command line arguments
@@ -109,6 +115,10 @@ def get_parsed_args():
                         help='The character used to separate the organism ' +
                              'ID from the rest of the sequence header ' +
                              '[def="|"]')
+    parser.add_argument('--fasta', dest='fasta', type=argparse.FileType('r'),
+                        help='FASTA file used to generate BLAST results, ' +
+                             'will be split into connected components and ' +
+                             'reprinted, one file per connected component')
 
     # Group: TODO
     parser.add_argument('-m', '--merge', dest='merge',
@@ -406,6 +416,24 @@ def print_abc_files(met_grf, metrics, out_pref):
 
     for met in metrics:
         handle[met].close()
+
+
+def print_connected_component_fasta_files(met_grf, fasta_handle, out_pref):
+    """
+    """
+    from Bio import SeqIO
+    fasta = SeqIO.to_dict(SeqIO.parse(fasta_handle, 'fasta'))
+    w = len(str(len(nx.connected_components(met_grf))))
+    cmp_cnt = 0
+    for comp in nx.connected_components(met_grf):
+        cmp_hdl = open(out_pref+"_comp"+str(cmp_cnt).zfill(w)+".fasta", 'w')
+        for sid in comp:
+            try:
+                cmp_hdl.write(">{0}\n{1}\n".format(sid, fasta[sid].seq))
+            except KeyError:
+                stderr.write("{0} not found in FASTA file\n".format(sid))
+        cmp_hdl.close()
+        cmp_cnt += 1
 
 
 if __name__ == "__main__":
