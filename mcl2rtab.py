@@ -9,7 +9,6 @@ by a four digit ID number (eg. KOG0001, KOG2437, etc.).
 import sys
 import re
 import argparse
-#from pandas import DataFrame
 
 
 def main(argv=None):
@@ -30,15 +29,7 @@ def main(argv=None):
 
     cpk_handle = open(args.prefix+"_clusters_per_kog_summary.Rtab", 'w')
     cpk_handle.write("Order\tFragmentation\tEvalueCutoff\tNormalization\t" +
-                     "Metric\tInflation\tClustersPerKOG\tKOGCount\n")
-
-#    cdf_cols = ["Metric", "Normalized", "Inflation", "KOGsPerCluster",
-#                "ClusterCount"]
-#    cluster_df = DataFrame(columns=cdf_cols)
-#
-#    kdf_cols = ["Metric", "Normalized", "Inflation", "ClustersPerKOG",
-#                "KOGCount"]
-#    kog_df = DataFrame(columns=kdf_cols)
+                     "Metric\tInflation\tClustersPerKOG\tClusterCount\n")
 
     for mcl_file in args.mcl_files:
         ordr, frag, ctof, norm, mtrc, infl = parse_file_name(mcl_file.name)
@@ -50,14 +41,8 @@ def main(argv=None):
         print_cpk(
             cpk_handle, ordr, frag, ctof, norm, mtrc, infl, clusters_per_kog)
 
-#        cluster_df(ordr, frag, ctof, norm, mtrc, infl, kogs_per_cluster)
-#        kog_df(ordr, frag, ctof, norm, mtrc, infl, clusters_per_kog)
-
     kpc_handle.close()
     cpk_handle.close()
-
-#    print_cluster_summary(args.prefix, cluster_df)
-#    print_kog_summary(args.prefix, kog_df)
 
 
 def get_parsed_args():
@@ -92,7 +77,7 @@ def get_parsed_args():
 def parse_file_name(mcl_file_name):
     """Gather information about cluster generation parameters from file name
     """
-    # Determine of fragmentation scheme was randomized for each KOG
+    # Determine if fragmentation scheme was randomized for each KOG
     if re.search('_ord', mcl_file_name):
         ordr = "Ordered"
     elif re.search('_shf', mcl_file_name):
@@ -244,24 +229,6 @@ def score_clustering(mcl_file):
             clusters_per_kog[count] = 1
 
     return kogs_per_cluster, clusters_per_kog
-
-
-#def update_cluster_df(cluster_df, kogs_per_cluster):
-#    pass
-#
-#
-#def update_kog_df(kog_df, clusters_per_kog):
-#    pass
-#
-#
-#def print_cluster_summary(prefix, kogs_per_cluster):
-#    file_name = prefix+"_kogs_per_cluster_summary.Rtab"
-#    cluster_summary = open(file_name, 'w')
-#
-#
-#def print_kog_summary(prefix, clusters_per_kog):
-#    file_name = prefix+"_clusters_per_kog_summary.Rtab"
-#    kog_summary = open(file_name, 'w')
 
 
 def print_kpc(
