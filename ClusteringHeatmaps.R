@@ -62,7 +62,7 @@ dev.off()
 
 pdf(paste(cpk.pref,"_I11-50_doublelog_8.5x3.pdf", sep=""), width=8.5, height=3)
 print(cpk.gg +geom_tile(color="grey42", aes(fill=log10(cpk$ClusterCount)))
-             +scale_fill_gradientn(colours=rp, name="Cluster Count"))
+             +scale_fill_gradientn(colours=rp, name="log10(Cluster Count)"))
 dev.off()
 
 
@@ -84,7 +84,7 @@ dev.off()
 
 pdf(paste(kpc.pref,"_I11-50_doublelog_8.5x3.pdf", sep=""), width=8.5, height=3)
 print(kpc.gg +geom_tile(color="grey42", aes(fill=log10(kpc$ClusterCount)))
-             +scale_fill_gradientn(colours=rp, name="Cluster Count"))
+             +scale_fill_gradientn(colours=rp, name="log10(Cluster Count)"))
 dev.off()
 
 
@@ -110,7 +110,7 @@ dev.off()
 
 pdf(paste(cpk.pref,"_I11-20_doublelog_8.5x3.pdf", sep=""), width=8.5, height=3)
 print(cpk12.gg +geom_tile(color="grey42", aes(fill=log10(cpk12$ClusterCount)))
-               +scale_fill_gradientn(colours=rp, name="Cluster Count"))
+               +scale_fill_gradientn(colours=rp, name="log10(Cluster Count)"))
 dev.off()
 
 
@@ -132,7 +132,7 @@ dev.off()
 
 pdf(paste(kpc.pref,"_I11-20_doublelog_8.5x3.pdf", sep=""), width=8.5, height=3)
 print(kpc12.gg +geom_tile(color="grey42", aes(fill=log10(kpc12$ClusterCount)))
-               +scale_fill_gradientn(colours=rp, name="Cluster Count"))
+               +scale_fill_gradientn(colours=rp, name="log10(Cluster Count)"))
 dev.off()
 
 
