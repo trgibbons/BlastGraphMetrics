@@ -30,7 +30,7 @@ def main(argv=None):
 
     met_grf = nx.Graph()  # NetworkX graph with various BLAST-based metrics
     org_ids = set()
-    metrics = ['bit', 'bpr', 'bsr', 'evl', 'pev']
+    metrics = ['bit', 'bpr', 'bsr', 'pev']
 
     get_self_bit_scores_and_org_ids(met_grf=met_grf, blast_handle=args.blast,
                                     idchar=args.idchar, org_ids=org_ids,
@@ -235,14 +235,14 @@ def get_metrics(met_grf, blast_handle,
             qry_len = float(temp[qlcol])
             ref_len = float(temp[slcol])
             metrics['bit'] = float(temp[bscol])
-            metrics['evl'] = Decimal(temp[evcol])
 
             #BLAST 2.2.28+ rounds E-values smaller than 1e-180 to zero
-            if metrics['evl'] == 0:
-                metrics['evl'] = Decimal(1e-181)
+            if float(temp[evcol]) == 0:
+                metrics['pev'] = float(181)
+            else:
+                # Compute -log10 'p()' of the E-value
+                metrics['pev'] = float(-Decimal(temp[evcol]).log10())
 
-            # Compute -log10 'p()' of the E-value
-            metrics['pev'] = float(-metrics['evl'].log10())
 
             # Compute 'bit per residue'
             metrics['bpr'] = metrics['bit'] / min(qry_len, ref_len)
@@ -298,7 +298,6 @@ def compute_organism_averages(met_grf, metrics, idchar, org_ids):
         # Heuristically chosen E-value based metrics must be recalculated after
         # normalization to guarantee that the two ranges do not overlap
         if edata['pev'] == float(181):
-            met_grf[qry_id][ref_id]['evl'] = None
             met_grf[qry_id][ref_id]['pev'] = None
 
     return org_avgs
@@ -319,7 +318,7 @@ def compute_global_averages(org_avgs, metrics):
     # The 'global' node has degree 0
     org_avgs.add_node('global', cnt=0,
                       bit_sum=float(0), bpr_sum=float(0), bsr_sum=float(0),
-                      evl_sum=Decimal(0), pev_sum=float(0))
+                      pev_sum=float(0))
 
     for qry_org, ref_org, edata in org_avgs.edges(data=True):
         org_avgs.node['global']['cnt'] += edata['cnt']
@@ -395,9 +394,6 @@ def normalize_metrics(met_grf, metrics, idchar, org_avgs):
 
             scale = glb_avg[met] / org_avgs[qry_org][ref_org][met+'_avg']
             met_grf[qry_id][ref_id]['pev'] = zro_pev*scale
-
-            tmp_pev = Decimal(10 ** -met_grf[qry_id][ref_id]['pev'])
-            met_grf[qry_id][ref_id]['evl'] = tmp_pev
 
 
 def print_abc_files(met_grf, metrics, out_pref):
