@@ -30,7 +30,7 @@ def main(argv=None):
 
     met_grf = nx.Graph()  # NetworkX graph with various BLAST-based metrics
     org_ids = set()
-    metrics = ['bit', 'bpr', 'bsr', 'pev']
+    metrics = ['bit', 'bpl', 'bsr', 'pev']
 
     get_self_bit_scores_and_org_ids(met_grf=met_grf, blast_handle=args.blast,
                                     idchar=args.idchar, org_ids=org_ids,
@@ -234,6 +234,11 @@ def get_metrics(met_grf, blast_handle,
         if met_grf.has_node(qry_id) and met_grf.has_node(ref_id):
             qry_len = float(temp[qlcol])
             ref_len = float(temp[slcol])
+            aln_len = float(temp[3])
+            qry_aln_beg = int(temp[6])
+            qry_aln_end = int(temp[7])
+            ref_aln_beg = int(temp[8])
+            ref_aln_end = int(temp[9])
             metrics['bit'] = float(temp[bscol])
 
             #BLAST 2.2.28+ rounds E-values smaller than 1e-180 to zero
@@ -243,9 +248,12 @@ def get_metrics(met_grf, blast_handle,
                 # Compute -log10 'p()' of the E-value
                 metrics['pev'] = float(-Decimal(temp[evcol]).log10())
 
-
-            # Compute 'bit per residue'
-            metrics['bpr'] = metrics['bit'] / min(qry_len, ref_len)
+            # Compute 'bit per anchored length'
+            anchored_length = compute_anchored_length(
+                qry_aln_beg=qry_aln_beg, qry_aln_end=qry_aln_end,
+                ref_aln_beg=ref_aln_beg, ref_aln_end=ref_aln_end,
+                aln_len=aln_len, qry_len=qry_len, ref_len=ref_len)
+            metrics['bpl'] = metrics['bit'] / anchored_length
 
             # Compute 'bit score ratio'
             qry_sbs = met_grf.node[qry_id]['sbs']
@@ -261,6 +269,31 @@ def get_metrics(met_grf, blast_handle,
             elif metrics['bit'] > met_grf[qry_id][ref_id]['bit']:
                 for met in metrics.keys():
                     met_grf[qry_id][ref_id][met] = metrics[met]
+
+
+def compute_anchored_length(qry_aln_beg, qry_aln_end, ref_aln_beg, ref_aln_end,
+                            aln_len, qry_len, ref_len):
+    """
+    Compute the maximal length of the alignable region anchored by the best hit
+    """
+    if qry_aln_beg < qry_aln_end:
+        qab = qry_aln_beg
+        qae = qry_aln_end
+    else:
+        qab = qry_aln_end
+        qae = qry_aln_beg
+
+    if ref_aln_beg < ref_aln_end:
+        rab = ref_aln_beg
+        rae = ref_aln_end
+    else:
+        rab = ref_aln_end
+        rae = ref_aln_beg
+
+    left_ohang = min(qab, rab)-1
+    right_ohang = min(qry_len-qae, ref_len-rae)
+
+    return left_ohang + aln_len + right_ohang
 
 
 def compute_organism_averages(met_grf, metrics, idchar, org_ids):
@@ -317,7 +350,7 @@ def compute_global_averages(org_avgs, metrics):
     """
     # The 'global' node has degree 0
     org_avgs.add_node('global', cnt=0,
-                      bit_sum=float(0), bpr_sum=float(0), bsr_sum=float(0),
+                      bit_sum=float(0), bpl_sum=float(0), bsr_sum=float(0),
                       pev_sum=float(0))
 
     for qry_org, ref_org, edata in org_avgs.edges(data=True):
