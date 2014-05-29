@@ -30,17 +30,20 @@ def main(argv=None):
 
     met_grf = nx.Graph()  # NetworkX graph with various BLAST-based metrics
     org_ids = set()
-    metrics = ['bit', 'bpl', 'bsr', 'pev']
+    metrics = ['bit', 'bpl', 'bsr', 'pe1', 'pe2']
+    #TODO: replace pev with pe1 & pe2
+    #TODO: pe1 & pe2 need only differ during normalization when p(E-values) are replaced by either max(p(E-value))+1 or 181+scaling_gap+1
+    #TODO: normalize twice, once multiplying by the graph avg, and once not
+    #TODO: replace option to specify standard columns in BLAST results
+    #TODO: add check when headers are present
 
     get_self_bit_scores_and_org_ids(met_grf=met_grf, blast_handle=args.blast,
                                     idchar=args.idchar, org_ids=org_ids,
-                                    evcol=args.evcol-1, bscol=args.bscol-1,
                                     qlcol=args.qlcol-1, slcol=args.slcol-1)
 
     args.blast.seek(0)
 
     get_metrics(met_grf=met_grf, blast_handle=args.blast,
-                evcol=args.evcol-1, bscol=args.bscol-1,
                 qlcol=args.qlcol-1, slcol=args.slcol-1)
 
     print_abc_files(met_grf=met_grf, metrics=metrics,
@@ -91,16 +94,6 @@ def get_parsed_args():
                         help='Prefix for the MCL-compatible "abc" graph files')
 
     # Group: Formatting options
-    parser.add_argument('--evcol', dest='evcol',
-                        action='store', type=int, default=11,
-                        help='One-indexed column containing pairwise ' +
-                             'E-values (not required if files include ' +
-                             'standard header lines) [def=11]')
-    parser.add_argument('--bscol', dest='bscol',
-                        action='store', type=int, default=12,
-                        help='One-indexed column containing pairwise bit ' +
-                             'scores (not required if files include ' +
-                             'standard header lines) [def=12]')
     parser.add_argument('--qlcol', dest='qlcol',
                         action='store', type=int, default=13,
                         help='One-indexed column containing query lengths ' +
@@ -243,10 +236,12 @@ def get_metrics(met_grf, blast_handle,
 
             #BLAST 2.2.28+ rounds E-values smaller than 1e-180 to zero
             if float(temp[evcol]) == 0:
-                metrics['pev'] = float(181)
+                metrics['pe1'] = float(181)
+                metrics['pe2'] = float(181)
             else:
                 # Compute -log10 'p()' of the E-value
-                metrics['pev'] = float(-Decimal(temp[evcol]).log10())
+                metrics['pe1'] = float(-Decimal(temp[evcol]).log10())
+                metrics['pe2'] = float(-Decimal(temp[evcol]).log10())
 
             # Compute 'bit per anchored length'
             anchored_length = compute_anchored_length(
@@ -313,6 +308,7 @@ def compute_organism_averages(met_grf, metrics, idchar, org_ids):
             organism, one edge per pair)
     """
     org_avgs = nx.Graph()
+    #TODO: create two averages, one with and one without self-hits
 
     for qry_id, ref_id, edata in met_grf.edges(data=True):
         qry_org = qry_id.split(idchar)[0]
@@ -330,8 +326,8 @@ def compute_organism_averages(met_grf, metrics, idchar, org_ids):
 
         # Heuristically chosen E-value based metrics must be recalculated after
         # normalization to guarantee that the two ranges do not overlap
-        if edata['pev'] == float(181):
-            met_grf[qry_id][ref_id]['pev'] = None
+        if edata['pe2'] == float(181):
+            met_grf[qry_id][ref_id]['pe2'] = None
 
     return org_avgs
 
@@ -349,9 +345,11 @@ def compute_global_averages(org_avgs, metrics):
         Nothing, the org_avgs data structure is modified in place
     """
     # The 'global' node has degree 0
+    #FIXME: It would be preferable if the metric_sum names were generated
+    #       automatically from the 'metrics' list
     org_avgs.add_node('global', cnt=0,
                       bit_sum=float(0), bpl_sum=float(0), bsr_sum=float(0),
-                      pev_sum=float(0))
+                      pe1_sum=float(0), pe2_sum=float(0))
 
     for qry_org, ref_org, edata in org_avgs.edges(data=True):
         org_avgs.node['global']['cnt'] += edata['cnt']
@@ -391,8 +389,8 @@ def normalize_metrics(met_grf, metrics, idchar, org_avgs):
     for met in metrics:
         glb_avg[met] = org_avgs.node['global'][met+'_avg']
 
-    max_pev = float("-inf")  # Largest observed post-scaling p(E-value)
-    min_pev_scl = float("inf")  # Smallest p(E-value) scaling factor
+    max_pe2 = float("-inf")  # Largest observed post-scaling p(E-value)
+    min_pe2_scl = float("inf")  # Smallest p(E-value) scaling factor
 
     for qry_id, ref_id, edata in met_grf.edges(data=True):
         qry_org = qry_id.split(idchar)[0]
@@ -409,24 +407,24 @@ def normalize_metrics(met_grf, metrics, idchar, org_avgs):
 
             # Capture extreme values for p(E-value) distribution after
             # normalization
-            if met == 'pev':
-                if edata['pev'] > max_pev:
-                    max_pev = edata['pev']
-                if scale < min_pev_scl:
-                    min_pev_scl = scale
+            if met == 'pe2':
+                if edata['pe2'] > max_pe2:
+                    max_pe2 = edata['pe2']
+                if scale < min_pe2_scl:
+                    min_pe2_scl = scale
 
     # max(p(E-value)) + gap = zero_p(E-value) * min(scale)
-    pev_gap = float(10)
-    min_zro_pev = max_pev + pev_gap
-    zro_pev = min_zro_pev / min_pev_scl
+    pe2_gap = float(10)
+    min_zro_pe2 = max_pe2 + pe2_gap
+    zro_pe2 = min_zro_pe2 / min_pe2_scl
 
     for qry_id, ref_id, edata in met_grf.edges(data=True):
-        if not met_grf[qry_id][ref_id]['pev']:
+        if not met_grf[qry_id][ref_id]['pe2']: # True if pe2 == None
             qry_org = qry_id.split(idchar)[0]
             ref_org = ref_id.split(idchar)[0]
 
-            scale = glb_avg[met] / org_avgs[qry_org][ref_org][met+'_avg']
-            met_grf[qry_id][ref_id]['pev'] = zro_pev*scale
+            scale = glb_avg['pe2'] / org_avgs[qry_org][ref_org]['pe2_avg']
+            met_grf[qry_id][ref_id]['pe2'] = zro_pe2*scale
 
 
 def print_abc_files(met_grf, metrics, out_pref):
