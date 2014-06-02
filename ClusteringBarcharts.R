@@ -22,11 +22,19 @@ kpc <- read.table(args[2], header=TRUE)
 
 # Refactor the Metric columns to set the order
 cpk$Metric <- factor(cpk$Metric,
-                     levels=c("BitScore","BitPerResidue","BitScoreRatio",
-                              "Evalue", "p(Evalue)"))
+                     levels=c("OrthoMCL_p(Evalue)", "Teds_p(Evalue)",
+                              "BitScore", "BitScoreRatio", "BitPerAnchoredLength"))
 kpc$Metric <- factor(kpc$Metric,
-                     levels=c("BitScore","BitPerResidue","BitScoreRatio",
-                              "Evalue", "p(Evalue)"))
+                     levels=c("OrthoMCL_p(Evalue)", "Teds_p(Evalue)",
+                              "BitScore", "BitScoreRatio", "BitPerAnchoredLength"))
+
+#TODO: change the order of the metrics
+#cpk$Metric <- factor(cpk$Metric,
+#                     levels=c("Teds_p(Evalue)", "OrthoMCL_p(Evalue)",
+#                              "BitScore", "BitScoreRatio", "BitPerAnchoredLength"))
+#kpc$Metric <- factor(kpc$Metric,
+#                     levels=c("Teds_p(Evalue)", "OrthoMCL_p(Evalue)",
+#                              "BitScore", "BitScoreRatio", "BitPerAnchoredLength"))
 
 cpk <- ddply(cpk, c("Metric", "Inflation"),
              transform, TotesClusters=sum(ClusterCount))

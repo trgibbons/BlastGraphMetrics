@@ -25,21 +25,21 @@ def main(argv=None):
 
     kpc_handle = open(args.prefix+"_kogs_per_cluster_summary.Rtab", 'w')
     kpc_handle.write("Order\tFragmentation\tEvalueCutoff\tNormalization\t" +
-                     "Metric\tInflation\tKOGsPerCluster\tClusterCount\n")
+                     "Dimensionalization\tMetric\tInflation\t" +
+                     "KOGsPerCluster\tClusterCount\n")
 
     cpk_handle = open(args.prefix+"_clusters_per_kog_summary.Rtab", 'w')
     cpk_handle.write("Order\tFragmentation\tEvalueCutoff\tNormalization\t" +
-                     "Metric\tInflation\tClustersPerKOG\tClusterCount\n")
+                     "Dimensionalization\tMetric\tInflation\t" +
+                     "ClustersPerKOG\tClusterCount\n")
 
     for mcl_file in args.mcl_files:
-        ordr, frag, ctof, norm, mtrc, infl = parse_file_name(mcl_file.name)
+        mcl_properties = parse_file_name(mcl_file.name)
         kogs_per_cluster, clusters_per_kog = score_clustering(mcl_file)
 
-        print_kpc(
-            kpc_handle, ordr, frag, ctof, norm, mtrc, infl, kogs_per_cluster)
+        print_kpc(kpc_handle, kogs_per_cluster, *mcl_properties)
 
-        print_cpk(
-            cpk_handle, ordr, frag, ctof, norm, mtrc, infl, clusters_per_kog)
+        print_cpk(cpk_handle, clusters_per_kog, *mcl_properties)
 
     kpc_handle.close()
     cpk_handle.close()
@@ -110,31 +110,44 @@ def parse_file_name(mcl_file_name):
             "cutoff using fomat '_1e-X'.")
 
     # Determine if graph was normalized (by inter-/intr-organsm averages)
-    if re.search('_nrm', mcl_file_name):
-        norm = "Normalized"
-    elif re.search('_raw', mcl_file_name):
-        norm = "Raw"
+    if re.search('_no_norm', mcl_file_name):
+        norm = "Unnormalized"
+    elif re.search('_norm_wi', mcl_file_name):
+        norm = "NormalizedWithSelfHits"
+    elif re.search('_norm_wo', mcl_file_name):
+        norm = "NormalizedWithoutSelfHits"
     else:
         raise Exception(
             "Could not determine if file "+mcl_file_name+" was normalized. " +
-            "Make sure file names contain either '_nrm' or '_raw'.")
+            "Make sure file names contain either '_no_norm', '_norm_wi', or " +
+            "'_norm_wo'.")
+
+    # Determine if edge weights have dimensions or are dimensionless
+    if re.search('_dmnd', mcl_file_name):
+        dmsn = "Dimensioned"
+    elif re.search('_dmls', mcl_file_name):
+        dmsn = "Dimensionless"
+    else:
+        raise Exception(
+            "Could not determine if file "+mcl_file_name+" has dimensions. " +
+            "Make sure file names contain either '_dmnd' or '_dmls'.")
 
     # Identify metric used to weight graph
     if re.search('_bit', mcl_file_name):
         mtrc = "BitScore"
-    elif re.search('_bpr', mcl_file_name):
-        mtrc = "BitPerResidue"
+    elif re.search('_bpl', mcl_file_name):
+        mtrc = "BitPerAnchoredLength"
     elif re.search('_bsr', mcl_file_name):
         mtrc = "BitScoreRatio"
-    elif re.search('_evl', mcl_file_name):
-        mtrc = "Evalue"
-    elif re.search('_pev', mcl_file_name):
-        mtrc = "p(Evalue)"
+    elif re.search('_pe1', mcl_file_name):
+        mtrc = "OrthoMCL_p(Evalue)"
+    elif re.search('_pe2', mcl_file_name):
+        mtrc = "Teds_p(Evalue)"
     else:
         raise Exception(
             "Could not determine metric used for file "+mcl_file_name+". " +
-            "Make sure file names contain one of '_bit', '_bpr', '_bsr', " +
-            "'_evl', or '_pev'.")
+            "Make sure file names contain one of '_bit', '_bpl', '_bsr', " +
+            "'_pe1', or '_pe2'.")
 
     # Identify inflation parameter used by MCL
     if re.search('I\d{2}', mcl_file_name):
@@ -146,7 +159,7 @@ def parse_file_name(mcl_file_name):
             "Make sure file names contain '_I##' where '##' is the " +
             "inflation parameter (sans decimal)")
 
-    return ordr, frag, ctof, norm, mtrc, infl
+    return ordr, frag, ctof, norm, dmsn, mtrc, infl
 
 
 def score_clustering(mcl_file):
@@ -231,24 +244,24 @@ def score_clustering(mcl_file):
     return kogs_per_cluster, clusters_per_kog
 
 
-def print_kpc(
-        kpc_handle, ordr, frag, ctof, norm, mtrc, infl, kogs_per_cluster):
+def print_kpc(kpc_handle, kogs_per_cluster,
+              ordr, frag, ctof, norm, dmsn, mtrc, infl):
     """
     """
     for kog_count in sorted(kogs_per_cluster.keys()):
-        out_line = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(
-                   ordr, frag, ctof, norm, mtrc, infl, kog_count,
+        out_line = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n".format(
+                   ordr, frag, ctof, norm, dmsn, mtrc, infl, kog_count,
                    kogs_per_cluster[kog_count])
         kpc_handle.write(out_line)
 
 
-def print_cpk(
-        cpk_handle, ordr, frag, ctof, norm, mtrc, infl, clusters_per_kog):
+def print_cpk(cpk_handle, clusters_per_kog,
+              ordr, frag, ctof, norm, dmsn, mtrc, infl):
     """
     """
     for cluster_count in sorted(clusters_per_kog.keys()):
-        out_line = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(
-                   ordr, frag, ctof, norm, mtrc, infl, cluster_count,
+        out_line = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n".format(
+                   ordr, frag, ctof, norm, dmsn, mtrc, infl, cluster_count,
                    clusters_per_kog[cluster_count])
         cpk_handle.write(out_line)
 
