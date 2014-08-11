@@ -1,4 +1,3 @@
 BlastGraphMetrics
 =================
-
-A comparison of BLAST-based metrics used for weighting graphs
+Evaluation of BLAST-based edge-weighting metrics used for homology prediction with the Markov Clustering algorithm
