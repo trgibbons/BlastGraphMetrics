@@ -243,7 +243,8 @@ do
         #  Analyze raw and normalized data sets seperately
         ########################################################################
         # Normalization (DiMensioNeD or DiMensionLesS)
-        for norm in {"norm_wo","norm_wi","no_norm"}{"_dmnd","_dmls"}
+        #for norm in {"norm_wo","norm_wi","no_norm"}{"_dmnd","_dmls"}
+        for norm in {"norm_wo","no_norm"}{"_dmnd","_dmls"}
         do
             ####################################################################
             #  Create subdirectory and change into it
@@ -261,7 +262,7 @@ do
             ####################################################################
             #  For each graph...
             ####################################################################
-            for metric in bit bpl bsr pe1 pe2
+            for metric in bit bpl bsr pev
             do
                 abc=${abc_pref}_${metric}.abc
                 mci=${abc_pref}_${metric}.mci
@@ -388,7 +389,7 @@ mkdir -p ${dir1}/barcharts
 date >> $log
 echo "Moving all PDFs into:" >> $log
 echo ${dir1}/barcharts >> $log
-mv */*/*/*/*.pdf ./barcharts/
+mv */*/*/*.pdf ./barcharts/
 echo >> $log
 
 ################################################################################
@@ -398,7 +399,7 @@ mkdir -p ${dir1}/cytoscape
 date >> $log
 echo "Moving all Cytoscape & Gephi files into:" >> $log
 echo ${dir1}/cytoscape >> $log
-mv */*/*/*/*.g*.bz2 ./cytoscape/
+mv */*/*/*.g*.bz2 ./cytoscape/
 echo >> $log
 
 ################################################################################

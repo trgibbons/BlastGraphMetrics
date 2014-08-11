@@ -31,7 +31,7 @@ def main(argv=None):
 
     met_grf = nx.Graph()  # NetworkX graph with various BLAST-based metrics
     org_ids = set()
-    metrics = ['bit', 'bpl', 'bsr', 'pe1', 'pe2']
+    metrics = ['bit', 'bpl', 'bsr', 'pev']
 
     get_self_bit_scores_and_org_ids(met_grf=met_grf, blast_handle=args.blast,
                                     idchar=args.idchar, org_ids=org_ids,
@@ -45,21 +45,16 @@ def main(argv=None):
     avgs_wi, avgs_wo = compute_organism_averages(
         met_grf=met_grf, metrics=metrics, idchar=args.idchar, org_ids=org_ids)
 
-    compute_global_averages(org_avgs=avgs_wi, metrics=metrics)
+    #compute_global_averages(org_avgs=avgs_wi, metrics=metrics)
     compute_global_averages(org_avgs=avgs_wo, metrics=metrics)
 
     print_unnormalized_abc_files(met_grf=met_grf, metrics=metrics,
                                  glb_avgs=avgs_wo.node['global'],
                                  out_pref=str(args.out_pref)+"_no_norm")
 
-    get_pe2_heuristic_zeros(met_grf=met_grf, metrics=metrics,
-                            idchar=args.idchar, org_avgs=avgs_wi)
-    get_pe2_heuristic_zeros(met_grf=met_grf, metrics=metrics,
-                            idchar=args.idchar, org_avgs=avgs_wo)
-
-    print_normalized_abc_files(met_grf=met_grf, metrics=metrics,
-                               idchar=args.idchar, org_avgs=avgs_wi,
-                               out_pref=str(args.out_pref)+"_norm_wi")
+    #print_normalized_abc_files(met_grf=met_grf, metrics=metrics,
+    #                           idchar=args.idchar, org_avgs=avgs_wi,
+    #                           out_pref=str(args.out_pref)+"_norm_wi")
     print_normalized_abc_files(met_grf=met_grf, metrics=metrics,
                                idchar=args.idchar, org_avgs=avgs_wo,
                                out_pref=str(args.out_pref)+"_norm_wo")
@@ -239,12 +234,10 @@ def get_metrics(met_grf, blast_handle,
 
             #BLAST 2.2.28+ rounds E-values smaller than 1e-180 to zero
             if float(temp[evcol]) == 0:
-                metrics['pe1'] = float(181)
-                metrics['pe2'] = float(181)
+                metrics['pev'] = float(181)
             else:
                 # Compute -log10 'p()' of the E-value
-                metrics['pe1'] = float(-Decimal(temp[evcol]).log10())
-                metrics['pe2'] = float(-Decimal(temp[evcol]).log10())
+                metrics['pev'] = float(-Decimal(temp[evcol]).log10())
 
             # Compute 'bit per anchored length'
             anchored_length = compute_anchored_length(
@@ -380,11 +373,6 @@ def compute_organism_averages(met_grf, metrics, idchar, org_ids):
                     avgs_wo[qry_org][ref_org][met+'_sum'] = edata[met]
                     avgs_wo[qry_org][ref_org][met+'_avg'] = None
 
-        # Heuristically chosen E-value based metrics must be recalculated after
-        # normalization to guarantee that the two ranges do not overlap
-        if edata['pe2'] == float(181):
-            met_grf[qry_id][ref_id]['pe2'] = None
-
     return avgs_wi, avgs_wo
 
 
@@ -403,9 +391,8 @@ def compute_global_averages(org_avgs, metrics):
     #FIXME: It would be preferable if the metric_sum names were generated
     #       automatically from the 'metrics' list
     # The 'global' node has degree 0
-    org_avgs.add_node('global', cnt=0,
-                      bit_sum=float(0), bpl_sum=float(0), bsr_sum=float(0),
-                      pe1_sum=float(0), pe2_sum=float(0))
+    org_avgs.add_node('global', cnt=0, bit_sum=float(0), bpl_sum=float(0),
+                      bsr_sum=float(0), pev_sum=float(0))
 
     for qry_org, ref_org, edata in org_avgs.edges(data=True):
         org_avgs.node['global']['cnt'] += edata['cnt']
@@ -420,59 +407,6 @@ def compute_global_averages(org_avgs, metrics):
     for met in metrics:
         met_sum = org_avgs.node['global'][met+'_sum']  # floats or Decimals
         org_avgs.node['global'][met+'_avg'] = met_sum/glb_cnt
-
-
-def get_pe2_heuristic_zeros(met_grf, metrics, idchar, org_avgs):
-    """Normalize metrics to adjust for average inter-organism divergence
-
-    Iterates through the edges in a NetworkX graph, multiplying each metric
-    used to weight each edge by a ratio of the average score for that metric
-    across the entire graph over the average score for that metric between
-    the pair of organisms connected by that particular edge.
-
-    BLAST-rounded E-values and corresponding p(E-values) should be set to zero
-    in the metrics graph before calling normalize_metrics(). This function will
-    then scale the rest of the graph and identify the largest p(E-value) and
-    most minimizing scaling factor. It will then generate a supplemental
-    heuristic distribution for the BLAST-rounded values that is guaranteed to
-    lie beyond the limits of the real distribution. Lastly, it will convert
-    this distribution back into E-values. Supplemental E-values are not
-    computed directly because they are more prone to rounding errors and
-    because manipulating floats offers significant performance benefits.
-    """
-    org_avgs.add_node('pe2_zro')
-
-    # This isn't a necessary variable but improve readability later on
-    glb_avg = org_avgs.node['global']['pe2_avg']
-
-    max_pe2 = float("-inf")  # Largest observed post-scaling p(E-value)
-    min_scl = float("inf")  # Smallest p(E-value) scaling factor
-
-    for qry_id, ref_id, edata in met_grf.edges(data=True):
-        if edata['pe2'] is None:
-            continue
-
-        qry_org = qry_id.split(idchar)[0]
-        ref_org = ref_id.split(idchar)[0]
-
-        try:
-            org_avg = org_avgs[qry_org][ref_org]['pe2_avg']
-        except KeyError:
-            continue
-
-        scale = glb_avg / org_avg
-        if scale < min_scl:
-            min_scl = scale
-
-        tmp_pe2 = edata['pe2'] * scale
-        if tmp_pe2 > max_pe2:
-            max_pe2 = tmp_pe2
-
-    # max(p(E-value)) + gap = zero_p(E-value) * min(scale)
-    pe2_gap = float(1)  # Equivalent to OrthoMCL pre-normalization offset
-    min_zro = max_pe2 + pe2_gap
-
-    org_avgs.node['pe2_zro'] = min_zro / min_scl
 
 
 def print_normalized_abc_files(met_grf, metrics, idchar, org_avgs, out_pref):
@@ -502,8 +436,6 @@ def print_normalized_abc_files(met_grf, metrics, idchar, org_avgs, out_pref):
         handle['dmls_'+met] = open(out_pref+'_dmls_'+met+'.abc', 'w')
         handle['dmnd_'+met] = open(out_pref+'_dmnd_'+met+'.abc', 'w')
 
-    pe2_zro = org_avgs.node['pe2_zro']
-
     for qry_id, ref_id, edata in met_grf.edges(data=True):
         if qry_id == ref_id:
             continue
@@ -520,9 +452,6 @@ def print_normalized_abc_files(met_grf, metrics, idchar, org_avgs, out_pref):
             if edata[met]:
                 dmls_met = edata[met] / dmls_scl
                 dmnd_met = edata[met] / dmnd_scl
-            elif met == 'pe2':  # Restore p(BLAST-rounded E-value)s
-                dmls_met = pe2_zro / dmls_scl
-                dmnd_met = pe2_zro / dmnd_scl
             else:  # just in case...
                 err_out = "Found empty {0} value between {1} and {2}.\n" \
                           .format(met, qry_id, ref_id)

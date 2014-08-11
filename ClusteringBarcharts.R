@@ -22,19 +22,11 @@ kpc <- read.table(args[2], header=TRUE)
 
 # Refactor the Metric columns to set the order
 cpk$Metric <- factor(cpk$Metric,
-                     levels=c("OrthoMCL_p(Evalue)", "Teds_p(Evalue)",
-                              "BitScore", "BitScoreRatio", "BitPerAnchoredLength"))
+                     levels=c("p(Evalue)", "BitScore", "BitScoreRatio",
+                              "AnchoredLength"))
 kpc$Metric <- factor(kpc$Metric,
-                     levels=c("OrthoMCL_p(Evalue)", "Teds_p(Evalue)",
-                              "BitScore", "BitScoreRatio", "BitPerAnchoredLength"))
-
-#TODO: change the order of the metrics
-#cpk$Metric <- factor(cpk$Metric,
-#                     levels=c("Teds_p(Evalue)", "OrthoMCL_p(Evalue)",
-#                              "BitScore", "BitScoreRatio", "BitPerAnchoredLength"))
-#kpc$Metric <- factor(kpc$Metric,
-#                     levels=c("Teds_p(Evalue)", "OrthoMCL_p(Evalue)",
-#                              "BitScore", "BitScoreRatio", "BitPerAnchoredLength"))
+                     levels=c("p(Evalue)", "BitScore", "BitScoreRatio",
+                              "AnchoredLength"))
 
 cpk <- ddply(cpk, c("Metric", "Inflation"),
              transform, TotesClusters=sum(ClusterCount))
@@ -98,15 +90,20 @@ cpk.gg <- cpk.gg +ggtitle(bquote(atop("Sensitivity",
                                       atop(.(args[1]), ""))))
 cpk.gg <- cpk.gg +ylab("KOG Count")
 cpk.gg <- cpk.gg +xlab("MCL Inflation Parameter")
-cpk.gg <- cpk.gg +geom_hline(yintercept=458, linetype="dashed", size=0.5)
+cpk.gg <- cpk.gg +geom_hline(yintercept=seq(458,max(458,max(cpk$ClusterCount)),458),
+                             linetype="dashed")
 cpk.gg <- cpk.gg +geom_hline(yintercept=seq(100,max(cpk$ClusterCount),100),
                              color="lightgray", size=0.05)
 # cpk.gg <- cpk.gg +geom_vline(xintercept=seq(1,4),
 #                              color="lightgray", size=0.05)
                 
-# Plot heatmaps to PDFs
-pdf(paste(cpk.pref,"_barcharts_8.5x3.pdf", sep=""), width=8.5, height=3)
+# Plot barcharts to PDFs
+pdf(paste(cpk.pref,"_I1-6_barcharts_8.5x3.pdf", sep=""), width=8.5, height=3)
 cpk.gg
+dev.off()
+
+pdf(paste(cpk.pref,"_I1-3_barcharts_8.5x3.pdf", sep=""), width=8.5, height=3)
+cpk.gg +xlim(1, 3)
 dev.off()
 
 
@@ -125,13 +122,18 @@ kpc.gg <- kpc.gg +ggtitle(bquote(atop("Specificity",
                                       atop(.(args[2]), ""))))
 kpc.gg <- kpc.gg +ylab("Cluster Count")
 kpc.gg <- kpc.gg +xlab("MCL Inflation Parameter")
-kpc.gg <- kpc.gg +geom_hline(yintercept=458, linetype="dashed")
+kpc.gg <- kpc.gg +geom_hline(yintercept=seq(458,max(458,max(kpc$ClusterCount)),458),
+                             linetype="dashed")
 kpc.gg <- kpc.gg +geom_hline(yintercept=seq(100,max(kpc$ClusterCount),100),
                              color="lightgray", size=0.1)
 # kpc.gg <- kpc.gg +geom_vline(xintercept=seq(1,4),
 #                              color="lightgray", size=0.1)
 
 # Plot heatmaps to PDFs
-pdf(paste(kpc.pref,"_barcharts_8.5x3.pdf", sep=""), width=8.5, height=3)
+pdf(paste(kpc.pref,"_I1-6_barcharts_8.5x3.pdf", sep=""), width=8.5, height=3)
 kpc.gg
+dev.off()
+
+pdf(paste(kpc.pref,"_I1-3_barcharts_8.5x3.pdf", sep=""), width=8.5, height=3)
+kpc.gg +xlim(1, 3)
 dev.off()
