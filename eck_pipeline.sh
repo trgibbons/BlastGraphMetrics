@@ -158,6 +158,7 @@ do
              -outfmt '7 std qlen slen' \
              -evalue $cutoff \
              -soft_masking true \
+             -num_threads 8 \
              2>&1 >> $log
         echo >> $log
 
@@ -199,6 +200,7 @@ do
                   --auto \
                   --reorder \
                   --treeout \
+                  --thread 8 \
                   $file \
                   > $mfa \
                   2>> $log
@@ -259,7 +261,7 @@ do
             ####################################################################
             #  For each graph...
             ####################################################################
-            for metric in bit bpl bsr pev
+            for metric in nle bit bsr bal
             do
                 abc=${abc_pref}_${metric}.abc
 #                mci=${abc_pref}_${metric}.mci

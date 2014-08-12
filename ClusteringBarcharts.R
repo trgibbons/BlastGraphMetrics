@@ -22,10 +22,10 @@ kpc <- read.table(args[2], header=TRUE)
 
 # Refactor the Metric columns to set the order
 cpk$Metric <- factor(cpk$Metric,
-                     levels=c("p(Evalue)", "BitScore", "BitScoreRatio",
+                     levels=c("-Log10Evalue", "BitScore", "BitScoreRatio",
                               "AnchoredLength"))
 kpc$Metric <- factor(kpc$Metric,
-                     levels=c("p(Evalue)", "BitScore", "BitScoreRatio",
+                     levels=c("-Log10Evalue", "BitScore", "BitScoreRatio",
                               "AnchoredLength"))
 
 cpk <- ddply(cpk, c("Metric", "Inflation"),

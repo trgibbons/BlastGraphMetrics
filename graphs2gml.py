@@ -180,18 +180,19 @@ def get_metric_from_filename(filename):
     """
     """
     # Identify metric used to weight graph
-    if re.search('_bit', filename):
+    if re.search('_nle', filename):
+        return 'nle'
+    elif re.search('_bit', filename):
         return 'bit'
-    elif re.search('_bpl', filename):
-        return 'bpl'
     elif re.search('_bsr', filename):
         return 'bsr'
-    elif re.search('_pev', filename):
-        return 'pev'
+    elif re.search('_bal', filename):
+        return 'bal'
     else:
         raise Exception(
             "Could not determine metric used for file "+filename+". Make " +
-            "sure file names contain one of '_bit', '_bpl', '_bsr', or 'pev'.")
+            "sure file names contain one of '_bit', '_bsr', '_bal', or " +
+            "'_nle'.")
 
 
 def add_edges_from_clustering(MG, mcl_handle):

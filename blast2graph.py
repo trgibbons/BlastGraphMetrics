@@ -31,7 +31,7 @@ def main(argv=None):
 
     met_grf = nx.Graph()  # NetworkX graph with various BLAST-based metrics
     org_ids = set()
-    metrics = ['bit', 'bpl', 'bsr', 'pev']
+    metrics = ['nle', 'bit', 'bsr', 'bal']
 
     get_self_bit_scores_and_org_ids(met_grf=met_grf, blast_handle=args.blast,
                                     idchar=args.idchar, org_ids=org_ids,
@@ -42,19 +42,15 @@ def main(argv=None):
     get_metrics(met_grf=met_grf, blast_handle=args.blast,
                 qlcol=args.qlcol-1, slcol=args.slcol-1)
 
-    avgs_wi, avgs_wo = compute_organism_averages(
+    avgs_wo = compute_organism_averages(
         met_grf=met_grf, metrics=metrics, idchar=args.idchar, org_ids=org_ids)
 
-    #compute_global_averages(org_avgs=avgs_wi, metrics=metrics)
     compute_global_averages(org_avgs=avgs_wo, metrics=metrics)
 
     print_unnormalized_abc_files(met_grf=met_grf, metrics=metrics,
                                  glb_avgs=avgs_wo.node['global'],
                                  out_pref=str(args.out_pref)+"_no_norm")
 
-    #print_normalized_abc_files(met_grf=met_grf, metrics=metrics,
-    #                           idchar=args.idchar, org_avgs=avgs_wi,
-    #                           out_pref=str(args.out_pref)+"_norm_wi")
     print_normalized_abc_files(met_grf=met_grf, metrics=metrics,
                                idchar=args.idchar, org_avgs=avgs_wo,
                                out_pref=str(args.out_pref)+"_norm_wo")
@@ -234,19 +230,19 @@ def get_metrics(met_grf, blast_handle,
 
             #BLAST 2.2.28+ rounds E-values smaller than 1e-180 to zero
             if float(temp[evcol]) == 0:
-                metrics['pev'] = float(181)
+                metrics['nle'] = float(181)
             else:
-                # Compute -log10 'p()' of the E-value
-                metrics['pev'] = float(-Decimal(temp[evcol]).log10())
+                # Compute Negative common (base 10) Log of the E-value
+                metrics['nle'] = float(-Decimal(temp[evcol]).log10())
 
-            # Compute 'bit per anchored length'
+            # Compute 'Bit per Anchored length'
             anchored_length = compute_anchored_length(
                 qry_aln_beg=qry_aln_beg, qry_aln_end=qry_aln_end,
                 ref_aln_beg=ref_aln_beg, ref_aln_end=ref_aln_end,
                 aln_len=aln_len, qry_len=qry_len, ref_len=ref_len)
-            metrics['bpl'] = metrics['bit'] / anchored_length
+            metrics['bal'] = metrics['bit'] / anchored_length
 
-            # Compute 'bit score ratio'
+            # Compute 'Bit Score Ratio'
             qry_sbs = met_grf.node[qry_id]['sbs']
             ref_sbs = met_grf.node[ref_id]['sbs']
             metrics['bsr'] = metrics['bit'] / min(qry_sbs, ref_sbs)
@@ -333,47 +329,30 @@ def compute_organism_averages(met_grf, metrics, idchar, org_ids):
         idchar: Character used to delineate between the organism ID and the
             remainder of the sequence ID
     Returns:
-        avgs_wi: A NetworkX graph data structure containing the total number
-            of edges between each pair of organisms, the cumulative sum of each
-            metric, and the average score for each metric (one node per
-            organism, one edge per pair), including (WIth) self-hits
         avgs_wo: A NetworkX graph data structure containing the total number
             of edges between each pair of organisms, the cumulative sum of each
             metric, and the average score for each metric (one node per
             organism, one edge per pair), excluding (WithOut) self-hits
     """
-    avgs_wi = nx.Graph()  # Inter-organism averages with self hits
     avgs_wo = nx.Graph()  # Inter-organism averages w/o self hits
 
     for qry_id, ref_id, edata in met_grf.edges(data=True):
         qry_org = qry_id.split(idchar)[0]
         ref_org = ref_id.split(idchar)[0]
 
-        if avgs_wi.has_edge(qry_org, ref_org):
-            avgs_wi[qry_org][ref_org]['cnt'] += 1
-            for met in metrics:
-                avgs_wi[qry_org][ref_org][met+'_sum'] += edata[met]
-        else:
-            avgs_wi.add_edge(qry_org, ref_org, cnt=1)
-            for met in metrics:
-                avgs_wi[qry_org][ref_org][met+'_sum'] = edata[met]
-                avgs_wi[qry_org][ref_org][met+'_avg'] = None
-
         # Skip self-hits for the "without" averages
         if not qry_id == ref_id:
-            #if avgs_wo.has_edge(qry_org, ref_org):
             try:
                 avgs_wo[qry_org][ref_org]['cnt'] += 1
                 for met in metrics:
                     avgs_wo[qry_org][ref_org][met+'_sum'] += edata[met]
-            #else:
             except KeyError:
                 avgs_wo.add_edge(qry_org, ref_org, cnt=1)
                 for met in metrics:
                     avgs_wo[qry_org][ref_org][met+'_sum'] = edata[met]
                     avgs_wo[qry_org][ref_org][met+'_avg'] = None
 
-    return avgs_wi, avgs_wo
+    return avgs_wo
 
 
 def compute_global_averages(org_avgs, metrics):
@@ -391,8 +370,8 @@ def compute_global_averages(org_avgs, metrics):
     #FIXME: It would be preferable if the metric_sum names were generated
     #       automatically from the 'metrics' list
     # The 'global' node has degree 0
-    org_avgs.add_node('global', cnt=0, bit_sum=float(0), bpl_sum=float(0),
-                      bsr_sum=float(0), pev_sum=float(0))
+    org_avgs.add_node('global', cnt=0, bit_sum=float(0), bal_sum=float(0),
+                      bsr_sum=float(0), nle_sum=float(0))
 
     for qry_org, ref_org, edata in org_avgs.edges(data=True):
         org_avgs.node['global']['cnt'] += edata['cnt']
