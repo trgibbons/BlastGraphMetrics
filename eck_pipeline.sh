@@ -31,7 +31,6 @@ usage=$usage" [Fragmentation scheme]"
 fragcheck="Third argument must be numeric"
 echo $3 | grep -E -q '^[0-9]+$' || die "${fragcheck}, '$3' provided"
 
-infasta=$1
 dirpref=$2
 filepref=$(basename $dirpref)
 scheme=$3
@@ -45,7 +44,7 @@ echo $dir0
 echo "All required scripts are assumed to be present."
 echo
 
-dir1=${dirpref}_${scheme}
+dir1=${dir0}/${dirpref}_${scheme}
 echo "Creating and moving into subdirectory:"
 echo $dir1
 mkdir -p $dir1
@@ -73,15 +72,14 @@ echo >> $log
 ################################################################################
 #  Check that the provided FASTA file exists and is not empty
 ################################################################################
-eck=${1}
+eck=${dir0}/$1
 if [ -s "${eck}" ]
 then
-    echo "Expanded CEGMA KOGs (ECK) file found:" >> $log
+    echo "Expanded CEGMA KOGs (ECK) database file found:" >> $log
     ls -lh $eck >> $log
     echo >> $log
-
-# TODO: I should probably have an 'else' in here...
-
+else
+    die "Expanded CEGMA KOGs (ECK) database ($eck) does not exist or is empty."
 fi
 
 ################################################################################
@@ -243,7 +241,6 @@ do
         #  Analyze raw and normalized data sets seperately
         ########################################################################
         # Normalization (DiMensioNeD or DiMensionLesS)
-        #for norm in {"norm_wo","norm_wi","no_norm"}{"_dmnd","_dmls"}
         for norm in {"norm_wo","no_norm"}{"_dmnd","_dmls"}
         do
             ####################################################################
@@ -265,7 +262,7 @@ do
             for metric in bit bpl bsr pev
             do
                 abc=${abc_pref}_${metric}.abc
-                mci=${abc_pref}_${metric}.mci
+#                mci=${abc_pref}_${metric}.mci
                 date >> $log
                 echo "Creating clusters from:" >> $log
                 echo $abc >> $log
