@@ -49,11 +49,11 @@ def main(argv=None):
 
     print_unnormalized_abc_files(met_grf=met_grf, metrics=metrics,
                                  glb_avgs=avgs_wo.node['global'],
-                                 out_pref=str(args.out_pref)+"_no_norm")
+                                 out_pref=str(args.out_pref)+"_raw")
 
     print_normalized_abc_files(met_grf=met_grf, metrics=metrics,
                                idchar=args.idchar, org_avgs=avgs_wo,
-                               out_pref=str(args.out_pref)+"_norm_wo")
+                               out_pref=str(args.out_pref)+"_nrm")
 
     if args.fasta:
         print_connected_component_fasta_files(met_grf=met_grf,
@@ -299,7 +299,7 @@ def print_unnormalized_abc_files(met_grf, metrics, glb_avgs, out_pref):
             if edata[met]:
                 dmls_met = edata[met] / glb_avgs[met+'_avg']
                 dmnd_met = edata[met]
-            elif met == 'pe2':  # Restore p(BLAST-rounded E-value)s
+            elif met == 'nle':  # Restore p(BLAST-rounded E-value)s
                 dmls_met = float(181) / glb_avgs[met+'_avg']
                 dmnd_met = float(181)
             else:  # just in case...

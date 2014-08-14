@@ -10,7 +10,7 @@
 #  code more readable, but that turned out to be more work than I decided was
 #  worth investing in a script that I couldn't really imagine anyone else using.
 #
-#  I suppose that as in nature, sometimes these things just happen:
+#  I suppose that, as in nature, sometimes these things just happen:
 #  http://en.wikipedia.org/wiki/Recurrent_laryngeal_nerve#Evidence_of_evolution
 #
 #  If you are having problems running this script, please do not hesistate to
@@ -167,7 +167,7 @@ do
         ########################################################################
         date >> $log
         echo "Generating abc graphs from ${blastp} for MCL" >> $log
-        nice ${dir0}/blast2graph.py \
+        nice ${dir0}/blast2graphs.py \
              $blastp \
              ${blastp%.blastp} \
              --fasta ${dir2}/$fasta
@@ -243,7 +243,8 @@ do
         #  Analyze raw and normalized data sets seperately
         ########################################################################
         # Normalization (DiMensioNeD or DiMensionLesS)
-        for norm in {"norm_wo","no_norm"}{"_dmnd","_dmls"}
+        #for norm in {"nrm","raw"}{"_dmnd","_dmls"}
+        for norm in {"nrm","raw"}"_dmnd"
         do
             ####################################################################
             #  Create subdirectory and change into it
@@ -320,7 +321,7 @@ do
             date >> $log
             echo "Generating stacked barchart PDFs for:" >> $log
             echo ${abc_pref} >> $log
-            nice ${dir0}/ClusteringBarcharts.R \
+            nice ${dir0}/barcharts.R \
                  ${abc_pref}_*.Rtab
             echo >> $log
 

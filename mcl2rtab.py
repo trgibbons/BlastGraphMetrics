@@ -110,17 +110,14 @@ def parse_file_name(mcl_file_name):
             "cutoff using fomat '_1e-X'.")
 
     # Determine if graph was normalized (by inter-/intr-organsm averages)
-    if re.search('_no_norm', mcl_file_name):
-        norm = "Unnormalized"
-    elif re.search('_norm_wi', mcl_file_name):
-        norm = "NormalizedWithSelfHits"
-    elif re.search('_norm_wo', mcl_file_name):
-        norm = "NormalizedWithoutSelfHits"
+    if re.search('_raw', mcl_file_name):
+        norm = "Raw"
+    elif re.search('_nrm', mcl_file_name):
+        norm = "Normalized"
     else:
         raise Exception(
             "Could not determine if file "+mcl_file_name+" was normalized. " +
-            "Make sure file names contain either '_no_norm', '_norm_wi', or " +
-            "'_norm_wo'.")
+            "Make sure file names contain either '_raw', '_nrm'.")
 
     # Determine if edge weights have dimensions or are dimensionless
     if re.search('_dmnd', mcl_file_name):
