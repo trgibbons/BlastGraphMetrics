@@ -88,16 +88,16 @@ def main(argv=None):
 
     args = get_parsed_args()
 
-    cegma = url2handle(cegma_url)
-    ckset = get_cegma_kogs(cegma)
-    cegma.close()
-
     kog = url2handle(kog_url)
-    s2k, kog_dat = map_seqs_to_kogs(kog, func, ckset, three2five)
+    s2k, kog_dat = map_seqs_to_kogs(kog, func, three2five)
     kog.close()
 
+    cegma = url2handle(cegma_url)
+    cks = get_cegma_kogs(cegma, s2k)
+    cegma.close()
+
     kyva = url2handle(kyva_url)
-    eck = get_complete_cegma_kogs(kyva, s2k)
+    eck = get_complete_cegma_kogs(kyva, s2k, cks)
     kog.close()
 
     Agamb = url2handle(Agamb_url)
@@ -116,7 +116,7 @@ def main(argv=None):
     add_cegma2_org(eck, "Tgond", Tgond, kog_dat)
     Tgond.close()
 
-    print_fasta_from_dict(eck, args.out)
+    print_expanded_cegma_kogs(eck)
 
 
 def get_parsed_args():
@@ -136,9 +136,9 @@ def get_parsed_args():
                     'CEGMA and KOG databases, downloaded from their ' +
                     'respective websites')
 
-    parser.add_argument('out', nargs='?', default='eck.fasta',
-                        type=argparse.FileType('w'),
-                        help="Optional output filename [def=eck.fasta]")
+#    parser.add_argument('out', nargs='?', default='eck.fasta',
+#                        type=argparse.FileType('w'),
+#                        help="Optional output filename [def=eck.fasta]")
 
     args = parser.parse_args()
 
@@ -162,22 +162,7 @@ def url2handle(url):
     return handle
 
 
-def get_cegma_kogs(cegma):
-    """Get list of KOGs used in CEGMA database
-    
-    get_cegma_kogs iterates through the headers in the FASTA-formatted CEGMA
-    database and gathers the set of represented KOGs.
-    """
-    cks = set()
-
-    for record in SeqIO.parse(cegma, 'fasta'):
-        kog = re.search('KOG\d{4}', str(record.id)).group()
-        cks.add(kog)
-
-    return cks
-
-
-def map_seqs_to_kogs(kog, func, ckset, three2five):
+def map_seqs_to_kogs(kog, func, three2five):
     """
     """
     s2k = dict()  # Map sequence IDs to KOG IDs
@@ -191,36 +176,49 @@ def map_seqs_to_kogs(kog, func, ckset, three2five):
 
         elif temp[0][0] == '[':
             kog = str(temp[1])
-            if kog in ckset:
-                ck = True
-                funcs = [' '.join(temp[2:])]
-                for f in str(temp[0]):
-                    try:
-                        funcs.append(func[f])
-                    except KeyError:
-                        # Skips bracket [] characters
-                        pass
-    
-                description = '; '.join(funcs)
-                kog_dat[kog] = description
+            funcs = [' '.join(temp[2:])]
+            for f in str(temp[0]):
+                try:
+                    funcs.append(func[f])
+                except KeyError:
+                    # Skips bracket [] characters
+                    pass
 
-            else:
-                ck = False
+            description = '; '.join(funcs)
+            kog_dat[kog] = description
 
-        elif ck == True:
+        else:
             org3 = str(temp[0]).rstrip(':')
             org5 = three2five[org3]
             old_id = str(temp[1])
             new_id = "{0}|{1}___{2} {3}".format(org5, old_id, kog, description)
             s2k[old_id] = new_id
 
-        else:
-            pass
-
     return s2k, kog_dat
 
 
-def get_complete_cegma_kogs(kyva, s2k):
+def get_cegma_kogs(cegma, s2k):
+    """Get list of KOGs used in CEGMA database
+    
+    get_cegma_kogs iterates through the headers in the FASTA-formatted CEGMA
+    database and gathers the set of represented KOGs.
+    """
+    cegma_out = open("cegma.fasta", 'w')
+    cks = set()  # set of CEGMA KOGs
+
+    for record in SeqIO.parse(cegma, 'fasta'):
+        #kog = re.search('KOG\d{4}', str(record.id)).group()
+        sid, kog = str(record.id).split("___")
+        cks.add(kog)
+        new_id = s2k[sid]
+        cegma_out.write(">{0}\n{1}\n".format(new_id, str(record.seq)))
+
+    cegma_out.close()
+
+    return cks
+
+
+def get_complete_cegma_kogs(kyva, s2k, cks):
     """Get complete KOGs from which CEGMA was derived
     
     The CEGMA developers were aiming to identify conserved orthologous
@@ -230,13 +228,20 @@ def get_complete_cegma_kogs(kyva, s2k):
     filters the complete KOG database down to just the KOGs used in the
     creation of CEGMA, but retains the inparalogous sequences.
     """
+    kog_out = open("kog.fasta", 'w')
     eck = dict()
+
     for record in SeqIO.parse(kyva, 'fasta'):
         try:
-            newid = s2k[record.id]
-            eck[newid] = str(record.seq)
+            new_id = s2k[record.id]
+            kog_out.write(">{0}\n{1}\n".format(new_id, str(record.seq)))
+            kog = re.search('KOG\d{4}', str(new_id)).group()
+            if kog in cks:
+                eck[new_id] = str(record.seq)
         except KeyError:
             continue
+
+    kog_out.close()
 
     return eck
 
@@ -251,11 +256,15 @@ def add_cegma2_org(eck, org, c2org, kog_dat):
         eck[newid] = str(record.seq)
 
 
-def print_fasta_from_dict(dict, out):
+def print_expanded_cegma_kogs(eck):
     """
     """
-    for k, v in dict.iteritems():
-        out.write(">{0}\n{1}\n".format(k, v))
+    eck_out = open("eck.fasta", 'w')
+
+    for k, v in eck.iteritems():
+        eck_out.write(">{0}\n{1}\n".format(k, v))
+
+    eck_out.close()
 
 
 if __name__ == "__main__":
