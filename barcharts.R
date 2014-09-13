@@ -41,13 +41,17 @@ kpc$Legend <- as.character(kpc$KOGsPerCluster)
 kpc$Legend[as.numeric(kpc$Legend) >= 5] <- "5+"
 kpc$Legend <- as.factor(kpc$Legend)
 
-wrong <- brewer.pal(name="YlOrRd", n=7)[4:7]
+# If you're lucky enough to not be red/green color blind, I think this color scheme looks better
+# right <- "#006d2c"
+# wrong <- brewer.pal(name="YlOrRd", n=7)[4:7]
+right <- "#4575b4"
+wrong <- rev(brewer.pal(name="RdYlBu", n=11))[7:10]
 
-cpk.reds <- nlevels(cpk$Legend)-1
-if (cpk.reds > 0) {
-    cpk.clrs = c("#006d2c", wrong[1:nlevels(cpk$Legend)-1])
+eck.reds <- nlevels(eck$Legend)-1
+if (eck.reds > 0) {
+    eck.clrs = c(right, wrong[1:nlevels(eck$Legend)-1])
 } else {
-    cpk.clrs = c("#006d2c")
+    eck.clrs = c(right)
 }
 
 kpc.reds <- nlevels(kpc$Legend)-1
