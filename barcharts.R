@@ -47,18 +47,18 @@ kpc$Legend <- as.factor(kpc$Legend)
 right <- "#4575b4"
 wrong <- rev(brewer.pal(name="RdYlBu", n=11))[7:10]
 
-eck.reds <- nlevels(eck$Legend)-1
-if (eck.reds > 0) {
-    eck.clrs = c(right, wrong[1:nlevels(eck$Legend)-1])
+cpk.reds <- nlevels(cpk$Legend)-1
+if (cpk.reds > 0) {
+    cpk.clrs = c(right, wrong[1:nlevels(cpk$Legend)-1])
 } else {
-    eck.clrs = c(right)
+    cpk.clrs = c(right)
 }
 
-kpc.reds <- nlevels(kpc$Legend)-1
-if (cpk.reds > 0) {
-    kpc.clrs = c("#006d2c", wrong[1:nlevels(kpc$Legend)-1])
+kpc.reds <- nlevels(cpk$Legend)-1
+if (kpc.reds > 0) {
+    kpc.clrs = c(right, wrong[1:nlevels(kpc$Legend)-1])
 } else {
-  kpc.clrs = c("#006d2c")
+    kpc.clrs = c(right)
 }
 
 
