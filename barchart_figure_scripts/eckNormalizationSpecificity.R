@@ -49,14 +49,14 @@ if (eck.reds > 0) {
   eck.clrs = c(right)
 }
 
-# Create ggplot object for KOGs per Cluster statistics
+# Create ggplot object for ECKs per Cluster statistics
 eck.gg <- ggplot(data=eck,
                  aes(x=Inflation, weight=ClusterCount))
 eck.gg <- eck.gg +geom_bar(aes(fill=Legend), binwidth=0.1)
 eck.gg <- eck.gg +scale_fill_manual(
                       values=eck.clrs,
                       guide=guide_legend(
-                          title="KOGs per\nCluster",
+                          title="ECKs per\nCluster",
                           title.hjust=0.5))
 eck.gg <- eck.gg +facet_grid(Normalization~Metric, scales="free", space="free")
 eck.gg <- eck.gg +theme_bw()
@@ -69,6 +69,6 @@ eck.gg <- eck.gg +geom_hline(yintercept=seq(100,max(eck$ClusterCount),100),
                              color="lightgray", size=0.05)
 
 # Plot barcharts to PDFs
-pdf("eckNormalizationSpecificity.pdf", width=8.5, height=9)
+pdf("eckNormalizationSpecificity.pdf", width=8.5, height=4)
 eck.gg
 dev.off()
