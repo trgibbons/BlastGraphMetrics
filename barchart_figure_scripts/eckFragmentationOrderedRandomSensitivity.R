@@ -7,10 +7,11 @@ library(ggplot2)
 library(RColorBrewer)
 
 # BlastGraphMetrics directory
-bgmdir <- "/Volumes/OdinsSaddlebag/Research/2014/clustering/BlastGraphMetrics"
+# bgmdir <- "/Volumes/OdinsSaddlebag/Research/2014/clustering/BlastGraphMetrics"
+bgmdir <- "../"
 
 # Data sets
-dss <- c("11111111111","11122222112","22222222222","33311222111","33333333333")
+dss <- c("11111111111","11122222112","22222222222","22233333223","33333333333")
 
 # Read in data
 for (ds in dss) {

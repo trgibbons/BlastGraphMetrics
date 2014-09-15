@@ -7,7 +7,8 @@ library(ggplot2)
 library(RColorBrewer)
 
 # BlastGraphMetrics directory
-bgmdir <- "/Volumes/OdinsSaddlebag/Research/2014/clustering/BlastGraphMetrics"
+# bgmdir <- "/Volumes/OdinsSaddlebag/Research/2014/clustering/BlastGraphMetrics"
+bgmdir <- "../"
 
 # Data sets
 dss <- c("raw","nrm")

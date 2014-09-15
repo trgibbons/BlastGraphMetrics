@@ -7,7 +7,8 @@ library(ggplot2)
 library(RColorBrewer)
 
 # BlastGraphMetrics directory
-bgmdir <- "/Volumes/OdinsSaddlebag/Research/2014/clustering/BlastGraphMetrics"
+# bgmdir <- "/Volumes/OdinsSaddlebag/Research/2014/clustering/BlastGraphMetrics"
+bgmdir <- "../"
 
 # Read in data
 cegma.fn <- "cegma_1/shf_rnd/1e-5/nrm_dmnd/cegma_111111_shf_rnd_1e-5_nrm_dmnd_kogs_per_cluster_summary.Rtab"
