@@ -98,7 +98,7 @@ def main(argv=None):
 
     kyva = url2handle(kyva_url)
     eck = get_complete_cegma_kogs(kyva, s2k, cks)
-    kog.close()
+    kyva.close()
 
     Agamb = url2handle(Agamb_url)
     add_cegma2_org(eck, "Agamb", Agamb, kog_dat)

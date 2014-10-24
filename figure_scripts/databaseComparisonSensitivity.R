@@ -61,7 +61,7 @@ dsdf.gg <- dsdf.gg +geom_bar(aes(fill=Legend), binwidth=0.1)
 dsdf.gg <- dsdf.gg +scale_fill_manual(
                         values=dsdf.clrs,
                         guide=guide_legend(
-                            title="Clusters\nper KOG",
+                            title="Clusters\nper ECK",
                             title.hjust=0.5))
 dsdf.gg <- dsdf.gg +facet_grid(DataSet~Metric, scales="free", space="free")
 dsdf.gg <- dsdf.gg +theme_bw()

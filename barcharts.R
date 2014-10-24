@@ -86,7 +86,7 @@ cpk.gg <- cpk.gg +geom_bar(aes(fill=Legend), binwidth=0.1)
 cpk.gg <- cpk.gg +scale_fill_manual(
                       values=cpk.clrs,
                       guide=guide_legend(
-                                title="Clusters\nper KOG",
+                                title="Clusters\nper ECK",
                                 title.hjust=0.5))
 cpk.gg <- cpk.gg +facet_grid(.~Metric)
 cpk.gg <- cpk.gg +theme_bw()
